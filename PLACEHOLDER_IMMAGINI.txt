@@ -1,0 +1,29 @@
+IMMAGINI PLACEHOLDER TEMPORANEE
+================================
+
+Per testare subito l'app, ho creato tre link dove puoi scaricare immagini simili:
+
+1. VERDE (Scuola Media) - green_nature.jpg
+   Cerca su: https://unsplash.com/s/photos/window-plants-coffee
+   Keywords: "cozy window plants green nature study"
+
+2. BLU (Superiori) - blue_study.jpg
+   Cerca su: https://unsplash.com/s/photos/study-desk-laptop-books
+   Keywords: "study desk laptop books mountain lake view"
+
+3. ROSSO/ARANCIONE (Università) - red_sunset.jpg
+   Cerca su: https://unsplash.com/s/photos/sunset-window-study
+   Keywords: "warm sunset window study tea plants"
+
+---
+
+ALTERNATIVE VELOCI:
+- Pixabay: https://pixabay.com/
+- Pexels: https://pexels.com/
+
+Scarica 3 immagini che ti piacciono e salvale con i nomi:
+- green_nature.jpg
+- blue_study.jpg
+- red_sunset.jpg
+
+Nella cartella: assets/backgrounds/

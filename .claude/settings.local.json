@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter build:*)",
+      "Bash(Select-String -Pattern \"error|warning|success\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(dir)",
+      "Bash(done)",
+      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\UnifiedBookSpiral.dart\")",
+      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\BookSpiral.dart\")",
+      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\FibonacciSpiralScreen.dart\")",
+      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\InfiniteBookSpiral.dart\")",
+      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\BookVortexBackground.dart\")",
+      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\SpiralBookPainter.dart\")",
+      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\SpiralPainter.dart\")"
+    ]
+  }
+}
