@@ -436,6 +436,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
     setState(() {
       _chatMessages.add(userMsg);
       _isSendingChat = true;
+      _isLoadingContent = true;
     });
     _chatTextController.clear();
 
@@ -476,16 +477,21 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        final answerText = data['answer'] ?? 'Non ho trovato una risposta.';
         setState(() {
+          // La risposta di Hooty va nella pagina sinistra come schema strutturato
+          _chapterContent = answerText;
+          // Aggiungiamo anche alla conversation history per il contesto
           _chatMessages.add(ChatMessage(
             id: DateTime.now().microsecondsSinceEpoch.toString(),
             role: MessageRole.assistant,
-            text: data['answer'] ?? 'Non ho trovato una risposta.',
+            text: answerText,
             createdAt: DateTime.now(),
           ));
         });
       } else {
         setState(() {
+          _chapterContent = 'Ops! Errore nella risposta dal server.';
           _chatMessages.add(ChatMessage(
             id: DateTime.now().microsecondsSinceEpoch.toString(),
             role: MessageRole.assistant,
@@ -496,6 +502,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
       }
     } catch (e) {
       setState(() {
+        _chapterContent = 'Non riesco a connettermi al server.';
         _chatMessages.add(ChatMessage(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
           role: MessageRole.assistant,
@@ -504,7 +511,10 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
         ));
       });
     } finally {
-      setState(() => _isSendingChat = false);
+      setState(() {
+        _isSendingChat = false;
+        _isLoadingContent = false;
+      });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_chatScrollController.hasClients) {
           _chatScrollController.animateTo(

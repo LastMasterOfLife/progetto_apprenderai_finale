@@ -22,7 +22,6 @@
 
 import 'package:flutter/material.dart';
 import 'OwlFaceWidget.dart';
-import 'MessageBubble.dart';
 import 'BookPainters.dart';
 import '../utils/ChatMessage.dart';
 import '../utils/StickyNote.dart';
@@ -392,7 +391,11 @@ class RightPageLayer extends StatelessWidget {
   }
 
   // === Chat View ===
+  // Mostra solo i messaggi dell'utente (le risposte di Hooty appaiono sulla pagina sinistra)
   Widget _buildChatView() {
+    // Filtra solo i messaggi dell'utente per la visualizzazione
+    final userMessages = chatMessages.where((m) => m.role == MessageRole.user).toList();
+
     return Column(
       children: [
         // Hooty header
@@ -419,7 +422,7 @@ class RightPageLayer extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Il tuo assistente gufo',
+                      'Scrivi qui, la risposta apparirà a sinistra',
                       style: TextStyle(fontSize: 10, color: Colors.black54, fontStyle: FontStyle.italic),
                     ),
                   ],
@@ -431,9 +434,9 @@ class RightPageLayer extends StatelessWidget {
         const SizedBox(height: 6),
         const Divider(height: 1),
         const SizedBox(height: 6),
-        // Messages
+        // Solo messaggi utente
         Expanded(
-          child: chatMessages.isEmpty
+          child: userMessages.isEmpty
               ? Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -441,7 +444,7 @@ class RightPageLayer extends StatelessWidget {
                       OwlFaceWidget(eyeOffset: 0, headSize: 70, isBlinking: false),
                       const SizedBox(height: 10),
                       Text(
-                        'Ciao! Sono Hooty!\nChiedimi qualsiasi cosa\nsu questo argomento!',
+                        'Ciao! Sono Hooty!\nChiedimi qualsiasi cosa\nsu questo argomento!\n\nLa mia risposta apparirà\nsulla pagina a sinistra.',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic, height: 1.5),
                       ),
@@ -450,10 +453,10 @@ class RightPageLayer extends StatelessWidget {
                 )
               : ListView.builder(
                   controller: chatScrollController,
-                  itemCount: chatMessages.length,
+                  itemCount: userMessages.length,
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   itemBuilder: (context, index) {
-                    return Messagebubble(message: chatMessages[index]);
+                    return _buildUserMessageBubble(userMessages[index]);
                   },
                 ),
         ),
@@ -465,7 +468,10 @@ class RightPageLayer extends StatelessWidget {
               children: [
                 OwlFaceWidget(eyeOffset: owlController.eyeOffset, headSize: 22, isBlinking: false),
                 const SizedBox(width: 6),
-                TypingDotsWidget(color: levelColor),
+                Text(
+                  'Hooty sta scrivendo sulla pagina...',
+                  style: TextStyle(fontSize: 11, color: levelColor, fontStyle: FontStyle.italic),
+                ),
               ],
             ),
           ),
@@ -510,6 +516,50 @@ class RightPageLayer extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// Bolla per il messaggio dell'utente (allineato a destra con stile domanda)
+  Widget _buildUserMessageBubble(ChatMessage message) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, left: 40),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: levelColor.withOpacity(0.15),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(14),
+              topRight: Radius.circular(14),
+              bottomLeft: Radius.circular(14),
+              bottomRight: Radius.circular(4),
+            ),
+            border: Border.all(color: levelColor.withOpacity(0.3), width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.question_answer, size: 12, color: levelColor.withOpacity(0.6)),
+                  const SizedBox(width: 4),
+                  Text(
+                    'La tua domanda',
+                    style: TextStyle(fontSize: 9, color: levelColor.withOpacity(0.6), fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                message.text,
+                style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

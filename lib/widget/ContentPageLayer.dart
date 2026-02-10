@@ -20,7 +20,6 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'dart:math' as math;
 
 /// Widget per la pagina del contenuto dell'argomento (RAG)
@@ -281,64 +280,278 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     );
   }
 
-  /// Contenuto effettivo quando caricato (con supporto Markdown)
+  /// Parsa il contenuto markdown e estrae sezioni con parole chiave raggruppate
+  List<_ContentSection> _parseContentToSections(String content) {
+    final sections = <_ContentSection>[];
+    String currentTitle = '';
+    final currentKeywords = <String>[];
+
+    final lines = content.split('\n');
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      // Riconosce header markdown (## o ### o #)
+      if (trimmed.startsWith('#')) {
+        // Salva la sezione precedente se ha contenuto
+        if (currentTitle.isNotEmpty || currentKeywords.isNotEmpty) {
+          sections.add(_ContentSection(
+            title: currentTitle.isNotEmpty ? currentTitle : 'Informazioni',
+            keywords: List.from(currentKeywords),
+          ));
+          currentKeywords.clear();
+        }
+        currentTitle = trimmed.replaceAll(RegExp(r'^#+\s*'), '').trim();
+      } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ')) {
+        // Bullet point → parola chiave
+        final keyword = trimmed.replaceFirst(RegExp(r'^[-*•]\s*'), '').trim();
+        if (keyword.isNotEmpty) {
+          currentKeywords.add(keyword);
+        }
+      } else if (trimmed.contains('**')) {
+        // Testo con grassetto → estrai le parti in grassetto come keywords
+        final boldPattern = RegExp(r'\*\*(.+?)\*\*');
+        final matches = boldPattern.allMatches(trimmed);
+        if (matches.isNotEmpty) {
+          for (final match in matches) {
+            final keyword = match.group(1)?.trim() ?? '';
+            if (keyword.isNotEmpty && keyword.length < 80) {
+              currentKeywords.add(keyword);
+            }
+          }
+        } else {
+          // Se non ci sono grassetti, estrai frasi brevi come keyword
+          _extractKeywordsFromText(trimmed, currentKeywords);
+        }
+      } else {
+        // Testo normale → estrai concetti chiave
+        _extractKeywordsFromText(trimmed, currentKeywords);
+      }
+    }
+
+    // Aggiungi l'ultima sezione
+    if (currentTitle.isNotEmpty || currentKeywords.isNotEmpty) {
+      sections.add(_ContentSection(
+        title: currentTitle.isNotEmpty ? currentTitle : 'Concetti chiave',
+        keywords: List.from(currentKeywords),
+      ));
+    }
+
+    // Se non abbiamo trovato sezioni strutturate, crea una sezione unica
+    if (sections.isEmpty) {
+      final allKeywords = <String>[];
+      _extractKeywordsFromText(content, allKeywords);
+      sections.add(_ContentSection(
+        title: widget.chapterTitle,
+        keywords: allKeywords.isNotEmpty ? allKeywords : [content.substring(0, math.min(200, content.length))],
+      ));
+    }
+
+    return sections;
+  }
+
+  /// Estrae frasi significative da un testo come parole chiave
+  void _extractKeywordsFromText(String text, List<String> keywords) {
+    // Rimuovi markdown inline
+    final cleaned = text
+        .replaceAll(RegExp(r'\*+'), '')
+        .replaceAll(RegExp(r'_+'), '')
+        .replaceAll(RegExp(r'`+'), '')
+        .trim();
+
+    if (cleaned.isEmpty) return;
+
+    // Se la frase è corta, usala direttamente
+    if (cleaned.length <= 60) {
+      keywords.add(cleaned);
+    } else {
+      // Dividi in frasi e prendi quelle significative
+      final sentences = cleaned.split(RegExp(r'[.;:!?]+'));
+      for (final sentence in sentences) {
+        final s = sentence.trim();
+        if (s.length >= 5 && s.length <= 80) {
+          keywords.add(s);
+        } else if (s.length > 80) {
+          // Tronca frasi troppo lunghe
+          keywords.add('${s.substring(0, 77)}...');
+        }
+      }
+    }
+  }
+
+  /// Contenuto strutturato come schema logico di parole chiave raggruppate
   Widget _buildContent() {
-    return Markdown(
-      data: widget.chapterContent,
-      shrinkWrap: true,
+    final sections = _parseContentToSections(widget.chapterContent);
+
+    // Colori per le diverse sezioni (ciclici)
+    final sectionColors = [
+      widget.levelColor,
+      widget.levelColor.withOpacity(0.8),
+      HSLColor.fromColor(widget.levelColor).withHue(
+        (HSLColor.fromColor(widget.levelColor).hue + 30) % 360
+      ).toColor(),
+      HSLColor.fromColor(widget.levelColor).withHue(
+        (HSLColor.fromColor(widget.levelColor).hue + 60) % 360
+      ).toColor(),
+      HSLColor.fromColor(widget.levelColor).withHue(
+        (HSLColor.fromColor(widget.levelColor).hue - 30) % 360
+      ).toColor(),
+    ];
+
+    return SingleChildScrollView(
       physics: const ClampingScrollPhysics(),
-      styleSheet: MarkdownStyleSheet(
-        p: const TextStyle(
-          fontSize: 13,
-          color: Colors.black87,
-          height: 1.6,
-        ),
-        h1: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: widget.levelColor,
-        ),
-        h2: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: widget.levelColor,
-        ),
-        h3: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: widget.levelColor,
-        ),
-        strong: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
-        ),
-        em: const TextStyle(
-          fontStyle: FontStyle.italic,
-          color: Colors.black87,
-        ),
-        listBullet: TextStyle(
-          fontSize: 13,
-          color: widget.levelColor,
-        ),
-        blockquote: TextStyle(
-          fontSize: 13,
-          color: Colors.black54,
-          fontStyle: FontStyle.italic,
-        ),
-        blockquoteDecoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: widget.levelColor.withOpacity(0.5),
-              width: 3,
-            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icona schema
+          Row(
+            children: [
+              Icon(Icons.account_tree, size: 16, color: widget.levelColor.withOpacity(0.5)),
+              const SizedBox(width: 6),
+              Text(
+                'Schema logico — Risposta di Hooty',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: widget.levelColor.withOpacity(0.5),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 12),
+          // Sezioni raggruppate
+          ...sections.asMap().entries.map((entry) {
+            final index = entry.key;
+            final section = entry.value;
+            final sectionColor = sectionColors[index % sectionColors.length];
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildSectionBlock(section, sectionColor),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  /// Costruisce un blocco sezione con titolo e parole chiave come tag
+  Widget _buildSectionBlock(_ContentSection section, Color sectionColor) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(color: sectionColor, width: 3),
         ),
-        code: TextStyle(
-          fontSize: 12,
-          backgroundColor: widget.levelColor.withOpacity(0.1),
-          color: Colors.black87,
+      ),
+      padding: const EdgeInsets.only(left: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Titolo sezione
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: sectionColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  section.title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: sectionColor,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Parole chiave come tag/chip
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: section.keywords.map((keyword) {
+              return _buildKeywordChip(keyword, sectionColor);
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Costruisce un singolo chip/tag per una parola chiave
+  Widget _buildKeywordChip(String keyword, Color color) {
+    // Se la keyword è breve (< 30 char) → chip compatto
+    // Se è lunga → box informativo
+    final isLong = keyword.length > 35;
+
+    if (isLong) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withOpacity(0.15), width: 0.5),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(Icons.arrow_right, size: 14, color: color.withOpacity(0.5)),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                keyword,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.black87,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3), width: 0.5),
+      ),
+      child: Text(
+        keyword,
+        style: TextStyle(
+          fontSize: 11,
+          color: color.withOpacity(0.9),
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
   }
+}
+
+/// Modello per una sezione di contenuto con titolo e parole chiave
+class _ContentSection {
+  final String title;
+  final List<String> keywords;
+
+  const _ContentSection({
+    required this.title,
+    required this.keywords,
+  });
 }
