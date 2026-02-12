@@ -15,6 +15,16 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+/// Modalità di visualizzazione della pagina sinistra
+enum ContentViewMode {
+  /// Appunti scritti a mano (default) con decorazioni
+  notes,
+  /// Testo pulito senza decorazioni markdown
+  plainText,
+  /// Pagina vuota con container personalizzabile
+  custom,
+}
+
 /// Widget per la pagina del contenuto dell'argomento (RAG)
 class ContentPageLayer extends StatefulWidget {
   final double width;
@@ -49,6 +59,9 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   late AnimationController _pulseController;
   late AnimationController _writeController;
   late Animation<double> _pulseAnimation;
+
+  /// Modalità corrente della pagina (default: notes = appunti decorati)
+  ContentViewMode _viewMode = ContentViewMode.notes;
 
   @override
   void initState() {
@@ -111,81 +124,229 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   }
 
   Widget _buildContentPage() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        // Header con titolo e bottone indietro
-        Row(
-          children: [
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  debugPrint('Back button pressed');
-                  widget.onBackPressed();
-                },
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: widget.levelColor.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.arrow_back,
-                    color: widget.levelColor,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                widget.chapterTitle,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: widget.levelColor,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        const Divider(height: 1),
-        const SizedBox(height: 12),
-        // Contenuto
+        // === PANNELLO LATERALE SINISTRO con icone ===
+        _buildSidePanel(),
+        // === CONTENUTO PRINCIPALE ===
         Expanded(
-          child: widget.isLoading ? _buildLoadingAnimation() : _buildContent(),
-        ),
-        // Indicazione swipe per tornare indietro
-        if (!widget.isLoading)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.swipe_left,
-                  color: widget.levelColor.withOpacity(0.4),
-                  size: 16,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Swipe per tornare all\'indice',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: widget.levelColor.withOpacity(0.4),
-                    fontStyle: FontStyle.italic,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header con titolo e bottone indietro
+              Row(
+                children: [
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        debugPrint('Back button pressed');
+                        widget.onBackPressed();
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: widget.levelColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: widget.levelColor,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.chapterTitle,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: widget.levelColor,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              // Contenuto — varia in base alla modalità
+              Expanded(
+                child: widget.isLoading
+                    ? _buildLoadingAnimation()
+                    : _buildContentForMode(),
+              ),
+              // Indicazione swipe per tornare indietro
+              if (!widget.isLoading)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.swipe_left,
+                        color: widget.levelColor.withOpacity(0.4),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Swipe per tornare all\'indice',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: widget.levelColor.withOpacity(0.4),
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Pannello laterale sinistro con icone per cambiare modalità
+  Widget _buildSidePanel() {
+    return Container(
+      width: 36,
+      margin: const EdgeInsets.only(right: 4),
+      decoration: BoxDecoration(
+        color: widget.levelColor.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: widget.levelColor.withOpacity(0.15),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Icona 1: Testo pulito (senza decorazioni)
+          _buildSidePanelIcon(
+            icon: Icons.text_snippet_outlined,
+            tooltip: 'Testo semplice',
+            isActive: _viewMode == ContentViewMode.plainText,
+            onTap: () {
+              setState(() {
+                _viewMode = _viewMode == ContentViewMode.plainText
+                    ? ContentViewMode.notes
+                    : ContentViewMode.plainText;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          // Icona 2: Pagina vuota / container custom
+          _buildSidePanelIcon(
+            icon: Icons.dashboard_customize_outlined,
+            tooltip: 'Pagina personalizzata',
+            isActive: _viewMode == ContentViewMode.custom,
+            onTap: () {
+              setState(() {
+                _viewMode = _viewMode == ContentViewMode.custom
+                    ? ContentViewMode.notes
+                    : ContentViewMode.custom;
+              });
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Singola icona del pannello laterale
+  Widget _buildSidePanelIcon({
+    required IconData icon,
+    required String tooltip,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: isActive
+                  ? widget.levelColor.withOpacity(0.2)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: isActive
+                  ? Border.all(color: widget.levelColor.withOpacity(0.4), width: 1)
+                  : null,
+            ),
+            child: Icon(
+              icon,
+              size: 16,
+              color: isActive
+                  ? widget.levelColor
+                  : widget.levelColor.withOpacity(0.5),
             ),
           ),
-      ],
+        ),
+      ),
+    );
+  }
+
+  /// Contenuto in base alla modalità selezionata
+  Widget _buildContentForMode() {
+    switch (_viewMode) {
+      case ContentViewMode.notes:
+        return _buildContent();
+      case ContentViewMode.plainText:
+        return _buildPlainTextContent();
+      case ContentViewMode.custom:
+        return _buildCustomContainer();
+    }
+  }
+
+  /// Vista testo pulito — risposta di Hooty senza decorazioni markdown
+  Widget _buildPlainTextContent() {
+    final plainText = _cleanMarkdown(widget.chapterContent);
+
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          plainText,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.black.withOpacity(0.8),
+            height: 1.7,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Pagina vuota con container personalizzabile
+  Widget _buildCustomContainer() {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        color: widget.color,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: widget.levelColor.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      // TODO: Personalizza questo container come preferisci
+      child: const SizedBox.expand(),
     );
   }
 
