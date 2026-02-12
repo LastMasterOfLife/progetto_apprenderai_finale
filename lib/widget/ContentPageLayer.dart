@@ -15,6 +15,9 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'dart:math' as math;
 
 /// Modalità di visualizzazione della pagina sinistra
@@ -64,6 +67,22 @@ class _ContentPageLayerState extends State<ContentPageLayer>
 
   /// Modalità corrente della pagina (default: notes = testo formattato)
   ContentViewMode _viewMode = ContentViewMode.notes;
+
+  /// Stringa DOT ricevuta dall'API generate-map
+  String _mapDotString = '';
+
+  /// Stringa SVG generata da QuickChart a partire dal DOT
+  String _mapSvgString = '';
+
+  /// Stato di caricamento della mappa
+  bool _isLoadingMap = false;
+
+  /// Eventuale errore nella chiamata API della mappa
+  String? _mapError;
+
+  /// Tiene traccia dell'ultimo topic per cui è stata richiesta la mappa
+  /// (evita chiamate duplicate)
+  String _lastMapTopic = '';
 
   @override
   void initState() {
@@ -245,10 +264,10 @@ class _ContentPageLayerState extends State<ContentPageLayer>
             },
           ),
           const SizedBox(height: 12),
-          // Icona 2: Pagina vuota / container custom
+          // Icona 2: Mappa concettuale
           _buildSidePanelIcon(
-            icon: Icons.dashboard_customize_outlined,
-            tooltip: 'Pagina personalizzata',
+            icon: Icons.account_tree_outlined,
+            tooltip: 'Mappa concettuale',
             isActive: _viewMode == ContentViewMode.custom,
             onTap: () {
               setState(() {
@@ -256,6 +275,10 @@ class _ContentPageLayerState extends State<ContentPageLayer>
                     ? ContentViewMode.notes
                     : ContentViewMode.custom;
               });
+              // Quando si attiva la vista mappa, lancia la chiamata API
+              if (_viewMode == ContentViewMode.custom) {
+                _fetchMap();
+              }
             },
           ),
         ],
@@ -311,6 +334,118 @@ class _ContentPageLayerState extends State<ContentPageLayer>
         return _buildPlainTextContent();
       case ContentViewMode.custom:
         return _buildCustomContainer();
+    }
+  }
+
+  // =====================================================================
+  // API: generazione mappa concettuale
+  // =====================================================================
+
+  /// Flusso completo: genera DOT → converte in SVG → mostra.
+  /// Viene invocata automaticamente quando si attiva la vista custom
+  /// e il topic è cambiato rispetto all'ultima richiesta.
+  Future<void> _fetchMap() async {
+    final topic = widget.chapterTitle.trim();
+    if (topic.isEmpty) return;
+
+    // Evita chiamate duplicate per lo stesso argomento
+    if (topic == _lastMapTopic && _mapSvgString.isNotEmpty) return;
+
+    setState(() {
+      _isLoadingMap = true;
+      _mapError = null;
+      _mapDotString = '';
+      _mapSvgString = '';
+    });
+
+    try {
+      // === STEP 1: Genera la stringa DOT dall'API ===
+      final dotUrl = Uri.parse(
+        'https://n8ndev.inforelea.academy/webhook-test/generate-map',
+      );
+
+      debugPrint('=== Map API Call (Step 1: DOT) ===');
+      debugPrint('Topic: $topic');
+
+      final dotResponse = await http.post(
+        dotUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'topic': topic,
+          'depth': 3,
+        }),
+      );
+
+      debugPrint('DOT Response status: ${dotResponse.statusCode}');
+
+      if (dotResponse.statusCode != 200) {
+        setState(() {
+          _mapError = 'Errore generazione mappa (${dotResponse.statusCode})';
+        });
+        return;
+      }
+
+      final dotString = dotResponse.body;
+      debugPrint('DOT ricevuto (${dotString.length} chars)');
+
+      setState(() {
+        _mapDotString = dotString;
+      });
+
+      // === STEP 2: Converti DOT in SVG tramite QuickChart ===
+      final svgString = await _fetchSvgFromDot(dotString);
+
+      if (svgString != null) {
+        setState(() {
+          _mapSvgString = svgString;
+          _lastMapTopic = topic;
+        });
+      } else {
+        setState(() {
+          _mapError = 'Errore nella conversione DOT → SVG';
+        });
+      }
+    } catch (e) {
+      debugPrint('Errore nella chiamata API mappa: $e');
+      setState(() {
+        _mapError = 'Errore di connessione: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoadingMap = false;
+      });
+    }
+  }
+
+  /// Converte una stringa DOT in SVG usando QuickChart.io
+  Future<String?> _fetchSvgFromDot(String dotString) async {
+    try {
+      final url = Uri.parse('https://quickchart.io/graphviz');
+
+      debugPrint('=== QuickChart API Call (Step 2: SVG) ===');
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'graph': dotString,
+          'layout': 'dot',
+          'format': 'svg',
+        }),
+      );
+
+      debugPrint('SVG Response status: ${response.statusCode}');
+      debugPrint('SVG Response length: ${response.body.length}');
+
+      if (response.statusCode == 200) {
+        return response.body;
+      } else {
+        debugPrint('QuickChart error: ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('Errore QuickChart: $e');
+      return null;
     }
   }
 
@@ -477,7 +612,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   // CONTENUTO: container custom
   // =====================================================================
 
-  /// Pagina vuota con container personalizzabile
+  /// Container per la mappa concettuale — mostra loading, errore o DOT ricevuto
   Widget _buildCustomContainer() {
     return Container(
       width: double.infinity,
@@ -490,8 +625,213 @@ class _ContentPageLayerState extends State<ContentPageLayer>
           width: 1,
         ),
       ),
-      // TODO: Personalizza questo container come preferisci
-      child: const SizedBox.expand(),
+      child: _buildMapContent(),
+    );
+  }
+
+  /// Contenuto del container mappa in base allo stato corrente
+  Widget _buildMapContent() {
+    // === LOADING ===
+    if (_isLoadingMap) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                color: widget.levelColor,
+                strokeWidth: 2.5,
+              ),
+            ),
+            const SizedBox(height: 14),
+            AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                final dotCount = (_dotsController.value * 3).floor() + 1;
+                final dots = '.' * dotCount;
+                return Opacity(
+                  opacity: _pulseAnimation.value.clamp(0.4, 1.0),
+                  child: Text(
+                    'Generazione mappa concettuale$dots',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: widget.levelColor.withOpacity(0.6),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    // === ERRORE ===
+    if (_mapError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: Colors.red.withOpacity(0.6),
+                size: 32,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _mapError!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.red.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _fetchMap,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: widget.levelColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Riprova',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: widget.levelColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // === NESSUN DATO (non ancora richiesto) ===
+    if (_mapSvgString.isEmpty && _mapDotString.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.account_tree_outlined,
+                color: widget.levelColor.withOpacity(0.3),
+                size: 40,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Nessuna mappa disponibile.\nSeleziona un argomento per generarla.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: widget.levelColor.withOpacity(0.5),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // === SVG RICEVUTO — rendering grafico con pan/zoom ===
+    if (_mapSvgString.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: InteractiveViewer(
+          constrained: false,
+          boundaryMargin: const EdgeInsets.all(100),
+          minScale: 0.2,
+          maxScale: 4.0,
+          child: SvgPicture.string(
+            _mapSvgString,
+            fit: BoxFit.contain,
+          ),
+        ),
+      );
+    }
+
+    // === Fallback: DOT ricevuto ma SVG non ancora generato ===
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.warning_amber_outlined,
+            color: Colors.orange.withOpacity(0.6),
+            size: 32,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Mappa DOT ricevuta ma conversione SVG fallita.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.orange.withOpacity(0.7),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                // Riprova solo la conversione SVG
+                setState(() {
+                  _isLoadingMap = true;
+                  _mapError = null;
+                });
+                _fetchSvgFromDot(_mapDotString).then((svg) {
+                  setState(() {
+                    _isLoadingMap = false;
+                    if (svg != null) {
+                      _mapSvgString = svg;
+                    } else {
+                      _mapError = 'Conversione SVG fallita';
+                    }
+                  });
+                });
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: widget.levelColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Riprova conversione',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: widget.levelColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
