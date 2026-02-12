@@ -23,8 +23,6 @@ import 'dart:math' as math;
 /// Modalità di visualizzazione della pagina sinistra
 enum ContentViewMode {
   /// Testo formattato con titoli e paragrafi (default)
-  notes,
-  /// Testo grezzo senza alcuna formattazione
   plainText,
   /// Pagina vuota con container personalizzabile
   custom,
@@ -66,7 +64,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   late Animation<double> _pulseAnimation;
 
   /// Modalità corrente della pagina (default: notes = testo formattato)
-  ContentViewMode _viewMode = ContentViewMode.notes;
+  ContentViewMode _viewMode = ContentViewMode.plainText;
 
   /// Stringa DOT ricevuta dall'API generate-map
   String _mapDotString = '';
@@ -258,7 +256,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
             onTap: () {
               setState(() {
                 _viewMode = _viewMode == ContentViewMode.plainText
-                    ? ContentViewMode.notes
+                    ? ContentViewMode.plainText
                     : ContentViewMode.plainText;
               });
             },
@@ -272,7 +270,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
             onTap: () {
               setState(() {
                 _viewMode = _viewMode == ContentViewMode.custom
-                    ? ContentViewMode.notes
+                    ? ContentViewMode.custom
                     : ContentViewMode.custom;
               });
               // Quando si attiva la vista mappa, lancia la chiamata API
@@ -328,8 +326,6 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   /// Contenuto in base alla modalità selezionata
   Widget _buildContentForMode() {
     switch (_viewMode) {
-      case ContentViewMode.notes:
-        return _buildContent();
       case ContentViewMode.plainText:
         return _buildPlainTextContent();
       case ContentViewMode.custom:
@@ -361,7 +357,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     try {
       // === STEP 1: Genera la stringa DOT dall'API ===
       final dotUrl = Uri.parse(
-        'https://n8ndev.inforelea.academy/webhook-test/generate-map',
+        'https://n8ndev.inforelea.academy/webhook/generate-map',
       );
 
       debugPrint('=== Map API Call (Step 1: DOT) ===');
@@ -429,7 +425,6 @@ class _ContentPageLayerState extends State<ContentPageLayer>
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'graph': dotString,
-          'layout': 'dot',
           'format': 'svg',
         }),
       );
@@ -527,62 +522,6 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     );
   }
 
-  // =====================================================================
-  // CONTENUTO: testo formattato (default)
-  // =====================================================================
-
-  Widget _buildContent() {
-    final sections = _parseToSections(widget.chapterContent);
-
-    return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ...sections.map((section) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Titolo sezione
-                    if (section.title.isNotEmpty) ...[
-                      Text(
-                        section.title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: widget.levelColor,
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                    ],
-                    // Paragrafi della sezione
-                    ...section.paragraphs.map((paragraph) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          paragraph,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black.withOpacity(0.8),
-                            height: 1.7,
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
 
   // =====================================================================
   // CONTENUTO: testo grezzo (plainText)
@@ -618,7 +557,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
       width: double.infinity,
       height: double.infinity,
       decoration: BoxDecoration(
-        color: widget.color,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
           color: widget.levelColor.withOpacity(0.1),
@@ -760,13 +699,14 @@ class _ContentPageLayerState extends State<ContentPageLayer>
           constrained: false,
           boundaryMargin: const EdgeInsets.all(100),
           minScale: 0.2,
-          maxScale: 4.0,
+          maxScale: 8.0,
           child: SvgPicture.string(
             _mapSvgString,
             fit: BoxFit.contain,
           ),
         ),
       );
+
     }
 
     // === Fallback: DOT ricevuto ma SVG non ancora generato ===

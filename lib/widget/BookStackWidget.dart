@@ -323,7 +323,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
     setState(() {
       _isContentPageOpen = true;
       _selectedChapter = chapter;
-      _activeBookmarkTab = 'note'; // Default: mostra le note
+      _activeBookmarkTab = 'notes'; // Default: mostra le note
     });
 
     // Avvia la chiamata API
@@ -387,7 +387,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
   void _onBookmarkTabChanged(String? tabId) {
     debugPrint('=== BOOKMARK CALLBACK === tabId ricevuto: $tabId, activeTab corrente: $_activeBookmarkTab');
     setState(() {
-      _activeBookmarkTab = (_activeBookmarkTab == tabId) ? null : tabId;
+      _activeBookmarkTab = (_activeBookmarkTab == tabId) ? "notes" : tabId;
     });
     debugPrint('=== BOOKMARK CALLBACK === nuovo activeTab: $_activeBookmarkTab');
   }
@@ -608,6 +608,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
                 Positioned(
                   left: widget.bookWidth,
                   top: 8,
+                  bottom: 5,
                   child: IgnorePointer(
                     ignoring: true,
                     child: Transform(
@@ -646,6 +647,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
                 Positioned(
                   left: widget.bookWidth,
                   top: 8,
+                  bottom: 5,
                   child: IgnorePointer(
                     ignoring: true,
                     child: Transform(
@@ -691,6 +693,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
                 Positioned(
                   left: _stackMoveAnimation.value,
                   top: 8,
+                  bottom: 5,
                   child: Container(
                     decoration: BoxDecoration(
                       boxShadow: [
@@ -722,6 +725,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
                 Positioned(
                   left: _stackMoveAnimation.value,
                   top: 8,
+                  bottom: 5,
                   child: Container(
                     decoration: BoxDecoration(
                       boxShadow: [
@@ -732,7 +736,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
                         ),
                       ],
                       // DEBUG: bordo rosso per visualizzare l'area della pagina contenuto
-                      border: Border.all(color: Colors.red, width: 2),
+                      border: Border.all(color: Colors.red.withOpacity(0.1), width: 2),
                     ),
                     child: ContentPageLayer(
                       width: widget.bookWidth * 0.99,
@@ -969,7 +973,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
                   },
                   // DEBUG: sfondo arancione per visualizzare la swipe zone
                   child: Container(
-                    color: Colors.orange.withOpacity(0.3),
+                    color: Colors.orange.withOpacity(0.01),
                     child: const SizedBox.expand(),
                   ),
                 ),

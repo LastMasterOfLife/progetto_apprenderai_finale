@@ -81,7 +81,7 @@ class RightPageLayer extends StatelessWidget {
           color: color,
           borderRadius: BorderRadius.circular(4),
           // DEBUG: bordo viola per visualizzare i limiti della pagina destra
-          border: Border.all(color: Colors.purple, width: 2),
+          border: Border.all(color: Colors.purple.withOpacity(0.1), width: 2),
         ),
         child: Stack(
           children: [
@@ -89,7 +89,7 @@ class RightPageLayer extends StatelessWidget {
           Positioned.fill(
             top: height * 0.25 + 8, // Below the bookmark tabs area
             child: Container(
-              color: Colors.green.withOpacity(0.1), // DEBUG: visualize content area
+              color: Colors.green.withOpacity(0.01), // DEBUG: visualize content area
               child: Padding(
                 padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
                 child: _buildPageContent(),
@@ -130,25 +130,8 @@ class RightPageLayer extends StatelessWidget {
     } else if (activeTab == 'chat') {
       return _buildChatView();
     }
-    // Default: empty page (just paper)
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.menu_book, size: 40, color: Colors.black12),
-          const SizedBox(height: 8),
-          Text(
-            'Usa i segnalibri in alto\nper le note o la chat con Hooty',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black26,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
-    );
+    // Default: notes
+    return _buildNotesView();
   }
 
   Widget _buildBookmarkTab({
@@ -164,8 +147,8 @@ class RightPageLayer extends StatelessWidget {
     // DEBUG: background color to visualize the clickable area of each bookmark tab
     return Container(
       color: tabId == 'notes'
-          ? Colors.red.withOpacity(0.3)
-          : Colors.blue.withOpacity(0.3),
+          ? Colors.red.withOpacity(0.01)
+          : Colors.blue.withOpacity(0.01),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
