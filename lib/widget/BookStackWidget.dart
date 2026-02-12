@@ -323,7 +323,7 @@ class _BookStackWidgetState extends State<BookStackWidget> with TickerProviderSt
     setState(() {
       _isContentPageOpen = true;
       _selectedChapter = chapter;
-      _activeBookmarkTab = 'chat'; // Default: mostra le note
+      _activeBookmarkTab = 'note'; // Default: mostra le note
     });
 
     // Avvia la chiamata API
