@@ -1,10 +1,12 @@
 // =============================================================================
-// ContentPageLayer — Pagina "appunti di Hooty"
+// ContentPageLayer — Pagina contenuto di Hooty
 // =============================================================================
 //
-// Mostra la risposta di Hooty come appunti scritti a mano su una pagina
-// del libro, con frecce, cerchi, sottolineature, box e scarabocchi
-// disegnati tramite CustomPainter per simulare note prese su carta.
+// Mostra la risposta di Hooty come testo pulito sulla pagina sinistra del
+// libro. Supporta tre modalità di visualizzazione tramite pannello laterale:
+//   - notes: testo formattato (default)
+//   - plainText: testo grezzo senza alcuna formattazione
+//   - custom: container vuoto personalizzabile
 //
 // Il contenuto supporta la rotazione 3D (mirror quando la pagina è
 // girata oltre 90°).
@@ -17,9 +19,9 @@ import 'dart:math' as math;
 
 /// Modalità di visualizzazione della pagina sinistra
 enum ContentViewMode {
-  /// Appunti scritti a mano (default) con decorazioni
+  /// Testo formattato con titoli e paragrafi (default)
   notes,
-  /// Testo pulito senza decorazioni markdown
+  /// Testo grezzo senza alcuna formattazione
   plainText,
   /// Pagina vuota con container personalizzabile
   custom,
@@ -57,10 +59,10 @@ class ContentPageLayer extends StatefulWidget {
 class _ContentPageLayerState extends State<ContentPageLayer>
     with TickerProviderStateMixin {
   late AnimationController _pulseController;
-  late AnimationController _writeController;
+  late AnimationController _dotsController;
   late Animation<double> _pulseAnimation;
 
-  /// Modalità corrente della pagina (default: notes = appunti decorati)
+  /// Modalità corrente della pagina (default: notes = testo formattato)
   ContentViewMode _viewMode = ContentViewMode.notes;
 
   @override
@@ -76,8 +78,8 @@ class _ContentPageLayerState extends State<ContentPageLayer>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    _writeController = AnimationController(
-      duration: const Duration(milliseconds: 2000),
+    _dotsController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
     )..repeat();
   }
@@ -85,7 +87,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   @override
   void dispose() {
     _pulseController.dispose();
-    _writeController.dispose();
+    _dotsController.dispose();
     super.dispose();
   }
 
@@ -229,7 +231,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Icona 1: Testo pulito (senza decorazioni)
+          // Icona 1: Testo pulito (senza formattazione)
           _buildSidePanelIcon(
             icon: Icons.text_snippet_outlined,
             tooltip: 'Testo semplice',
@@ -312,7 +314,146 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     }
   }
 
-  /// Vista testo pulito — risposta di Hooty senza decorazioni markdown
+  // =====================================================================
+  // ANIMAZIONE DI CARICAMENTO
+  // =====================================================================
+
+  /// Animazione di caricamento — linee placeholder + testo pulsante
+  Widget _buildLoadingAnimation() {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: AnimatedBuilder(
+              animation: _dotsController,
+              builder: (context, child) {
+                return _buildShimmerLines();
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                // Punti animati: da 1 a 3
+                final dotCount = (_dotsController.value * 3).floor() + 1;
+                final dots = '.' * dotCount;
+
+                return Opacity(
+                  opacity: _pulseAnimation.value.clamp(0.4, 1.0),
+                  child: Text(
+                    'Hooty sta preparando la risposta$dots',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: widget.levelColor.withOpacity(0.6),
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Linee shimmer/placeholder durante il caricamento
+  Widget _buildShimmerLines() {
+    final rng = math.Random(42);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: List.generate(8, (i) {
+        // Larghezza variabile per simulare righe di testo
+        final widthFraction = 0.5 + rng.nextDouble() * 0.45;
+        // Opacità che pulsa leggermente in modo sfalsato per ogni riga
+        final phase = (_dotsController.value + i * 0.12) % 1.0;
+        final opacity = 0.08 + 0.08 * math.sin(phase * math.pi);
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: widthFraction,
+            child: Container(
+              height: 10,
+              decoration: BoxDecoration(
+                color: widget.levelColor.withOpacity(opacity),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  // =====================================================================
+  // CONTENUTO: testo formattato (default)
+  // =====================================================================
+
+  Widget _buildContent() {
+    final sections = _parseToSections(widget.chapterContent);
+
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...sections.map((section) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Titolo sezione
+                    if (section.title.isNotEmpty) ...[
+                      Text(
+                        section.title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: widget.levelColor,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    // Paragrafi della sezione
+                    ...section.paragraphs.map((paragraph) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text(
+                          paragraph,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black.withOpacity(0.8),
+                            height: 1.7,
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =====================================================================
+  // CONTENUTO: testo grezzo (plainText)
+  // =====================================================================
+
+  /// Vista testo grezzo — risposta di Hooty senza alcuna formattazione
   Widget _buildPlainTextContent() {
     final plainText = _cleanMarkdown(widget.chapterContent);
 
@@ -332,6 +473,10 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     );
   }
 
+  // =====================================================================
+  // CONTENUTO: container custom
+  // =====================================================================
+
   /// Pagina vuota con container personalizzabile
   Widget _buildCustomContainer() {
     return Container(
@@ -350,58 +495,14 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     );
   }
 
-  /// Animazione di caricamento - Hooty sta scrivendo gli appunti
-  Widget _buildLoadingAnimation() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _writeController,
-              builder: (context, child) {
-                return CustomPaint(
-                  painter: _LoadingScribblePainter(
-                    progress: _writeController.value,
-                    color: widget.levelColor,
-                  ),
-                  child: const SizedBox.expand(),
-                );
-              },
-            ),
-          ),
-          Center(
-            child: AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Opacity(
-                  opacity: _pulseAnimation.value.clamp(0.4, 1.0),
-                  child: Text(
-                    'Hooty sta prendendo appunti...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: widget.levelColor.withOpacity(0.6),
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // =====================================================================
-  // PARSING: da markdown a sezioni strutturate
+  // PARSING: da markdown a sezioni con titoli e paragrafi
   // =====================================================================
 
-  List<_NoteSection> _parseToNoteSections(String content) {
-    final sections = <_NoteSection>[];
+  List<_TextSection> _parseToSections(String content) {
+    final sections = <_TextSection>[];
     String currentTitle = '';
-    final currentItems = <_NoteItem>[];
+    final currentParagraphs = <String>[];
 
     final lines = content.split('\n');
 
@@ -410,77 +511,37 @@ class _ContentPageLayerState extends State<ContentPageLayer>
       if (trimmed.isEmpty) continue;
 
       if (trimmed.startsWith('#')) {
-        if (currentTitle.isNotEmpty || currentItems.isNotEmpty) {
-          sections.add(_NoteSection(
-            title: currentTitle.isNotEmpty ? currentTitle : 'Appunti',
-            items: List.from(currentItems),
+        // Nuova sezione: salva la precedente
+        if (currentTitle.isNotEmpty || currentParagraphs.isNotEmpty) {
+          sections.add(_TextSection(
+            title: currentTitle,
+            paragraphs: List.from(currentParagraphs),
           ));
-          currentItems.clear();
+          currentParagraphs.clear();
         }
         currentTitle = trimmed.replaceAll(RegExp(r'^#+\s*'), '').trim();
-      } else if (trimmed.startsWith('- ') ||
-          trimmed.startsWith('* ') ||
-          trimmed.startsWith('• ')) {
-        final text = trimmed.replaceFirst(RegExp(r'^[-*•]\s*'), '').trim();
-        if (text.isNotEmpty) {
-          currentItems.add(_NoteItem(
-            text: _cleanMarkdown(text),
-            type: _NoteItemType.bullet,
-          ));
-        }
-      } else if (trimmed.contains('**')) {
-        final boldPattern = RegExp(r'\*\*(.+?)\*\*');
-        final matches = boldPattern.allMatches(trimmed);
-        if (matches.isNotEmpty) {
-          for (final match in matches) {
-            final kw = match.group(1)?.trim() ?? '';
-            if (kw.isNotEmpty && kw.length < 80) {
-              currentItems.add(_NoteItem(
-                text: kw,
-                type: _NoteItemType.keyword,
-              ));
-            }
-          }
-          // Aggiungi anche il testo completo ripulito come contesto
-          final fullText = _cleanMarkdown(trimmed);
-          if (fullText.length > 20) {
-            currentItems.add(_NoteItem(
-              text: fullText,
-              type: _NoteItemType.note,
-            ));
-          }
-        } else {
-          currentItems.add(_NoteItem(
-            text: _cleanMarkdown(trimmed),
-            type: _NoteItemType.note,
-          ));
-        }
       } else {
+        // Riga di testo — rimuovi solo la sintassi markdown
         final cleaned = _cleanMarkdown(trimmed);
-        if (cleaned.length <= 50) {
-          currentItems.add(_NoteItem(text: cleaned, type: _NoteItemType.keyword));
-        } else {
-          currentItems.add(_NoteItem(text: cleaned, type: _NoteItemType.note));
+        if (cleaned.isNotEmpty) {
+          currentParagraphs.add(cleaned);
         }
       }
     }
 
-    if (currentTitle.isNotEmpty || currentItems.isNotEmpty) {
-      sections.add(_NoteSection(
-        title: currentTitle.isNotEmpty ? currentTitle : 'Concetti chiave',
-        items: List.from(currentItems),
+    // Ultima sezione
+    if (currentTitle.isNotEmpty || currentParagraphs.isNotEmpty) {
+      sections.add(_TextSection(
+        title: currentTitle,
+        paragraphs: List.from(currentParagraphs),
       ));
     }
 
+    // Fallback se nessuna sezione trovata
     if (sections.isEmpty) {
-      sections.add(_NoteSection(
-        title: widget.chapterTitle,
-        items: [
-          _NoteItem(
-            text: content.substring(0, math.min(200, content.length)),
-            type: _NoteItemType.note,
-          )
-        ],
+      sections.add(_TextSection(
+        title: '',
+        paragraphs: [content.substring(0, math.min(500, content.length))],
       ));
     }
 
@@ -493,708 +554,18 @@ class _ContentPageLayerState extends State<ContentPageLayer>
         .replaceAll(RegExp(r'_+'), '')
         .replaceAll(RegExp(r'`+'), '')
         .replaceAll(RegExp(r'\[([^\]]+)\]\([^)]+\)'), r'$1')
+        .replaceFirst(RegExp(r'^[-*•]\s*'), '')
         .trim();
   }
-
-  // =====================================================================
-  // BUILD: Pagina stile "appunti scritti a mano"
-  // =====================================================================
-
-  Widget _buildContent() {
-    final sections = _parseToNoteSections(widget.chapterContent);
-    final rng = math.Random(widget.chapterContent.hashCode);
-
-    // Colori "penna" per le sezioni
-    final penColors = [
-      widget.levelColor,
-      const Color(0xFF1A237E), // blu scuro
-      const Color(0xFF4A148C), // viola
-      const Color(0xFFB71C1C), // rosso
-      const Color(0xFF004D40), // teal scuro
-      const Color(0xFFE65100), // arancione
-    ];
-
-    return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ...sections.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final section = entry.value;
-            final penColor = penColors[idx % penColors.length];
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: _buildHandwrittenSection(section, penColor, rng, idx),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  /// Sezione scritta a mano con titolo cerchiato/sottolineato e items
-  Widget _buildHandwrittenSection(
-      _NoteSection section, Color penColor, math.Random rng, int sectionIdx) {
-    // Tipo di decorazione titolo: alterna cerchio, rettangolo, sottolineatura
-    final titleDecoType = sectionIdx % 3;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // === TITOLO con decorazione "scarabocchiata" ===
-        _buildHandwrittenTitle(section.title, penColor, titleDecoType, rng),
-        const SizedBox(height: 10),
-        // === ITEMS ===
-        ...section.items.asMap().entries.map((e) {
-          final itemIdx = e.key;
-          final item = e.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: _buildHandwrittenItem(item, penColor, rng, itemIdx),
-          );
-        }),
-        // Freccia di connessione verso la sezione successiva
-        if (sectionIdx < 5) // massimo 5 frecce
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 4),
-            child: CustomPaint(
-              painter: _ConnectionArrowPainter(
-                color: penColor.withOpacity(0.3),
-                seed: sectionIdx,
-              ),
-              child: const SizedBox(width: double.infinity, height: 20),
-            ),
-          ),
-      ],
-    );
-  }
-
-  /// Titolo con decorazione "a mano" — cerchiato, boxato o sottolineato
-  Widget _buildHandwrittenTitle(
-      String title, Color penColor, int decoType, math.Random rng) {
-    return CustomPaint(
-      painter: _TitleDecorationPainter(
-        type: decoType,
-        color: penColor,
-        seed: title.hashCode,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Text(
-          title.toUpperCase(),
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: penColor,
-            letterSpacing: 1.2,
-            height: 1.3,
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Singolo item degli appunti
-  Widget _buildHandwrittenItem(
-      _NoteItem item, Color penColor, math.Random rng, int idx) {
-    switch (item.type) {
-      case _NoteItemType.keyword:
-        return _buildKeywordNote(item.text, penColor, rng, idx);
-      case _NoteItemType.bullet:
-        return _buildBulletNote(item.text, penColor, idx);
-      case _NoteItemType.note:
-        return _buildTextNote(item.text, penColor, idx);
-    }
-  }
-
-  /// Keyword: box disegnato a mano con testo dentro
-  Widget _buildKeywordNote(
-      String text, Color penColor, math.Random rng, int idx) {
-    final slight = (rng.nextDouble() - 0.5) * 2.0; // rotazione leggera
-
-    return Transform.rotate(
-      angle: slight * 0.015,
-      child: CustomPaint(
-        painter: _HanddrawnBoxPainter(
-          color: penColor,
-          seed: idx + text.hashCode,
-          filled: idx % 3 == 0,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Piccolo simbolo disegnato a mano
-              CustomPaint(
-                painter: _SmallDoodlePainter(
-                  type: idx % 4,
-                  color: penColor,
-                ),
-                child: const SizedBox(width: 14, height: 14),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: penColor.withOpacity(0.9),
-                    height: 1.3,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Bullet: freccia disegnata a mano + testo
-  Widget _buildBulletNote(String text, Color penColor, int idx) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Freccia/simbolo disegnato a mano
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: CustomPaint(
-              painter: _HanddrawnArrowPainter(
-                color: penColor,
-                seed: idx,
-              ),
-              child: const SizedBox(width: 18, height: 14),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 11.5,
-                color: Colors.black87,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Testo note: con sottolineatura ondulata se importanti
-  Widget _buildTextNote(String text, Color penColor, int idx) {
-    final isShort = text.length < 60;
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 4),
-      child: CustomPaint(
-        painter: isShort
-            ? _WavyUnderlinePainter(
-                color: penColor.withOpacity(0.2),
-                seed: idx,
-              )
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.black.withOpacity(0.75),
-              height: 1.6,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// =======================================================================
-// CUSTOM PAINTERS — Effetti "scritti a mano"
-// =======================================================================
-
-/// Painter per lo scarabocchio animato durante il caricamento
-class _LoadingScribblePainter extends CustomPainter {
-  final double progress;
-  final Color color;
-
-  _LoadingScribblePainter({required this.progress, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withOpacity(0.25)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final rng = math.Random(42);
-
-    // Disegna linee "scarabocchio" che si scrivono progressivamente
-    for (int i = 0; i < 8; i++) {
-      final y = 20.0 + i * (size.height - 40) / 8;
-      final lineProgress = ((progress * 10 - i) / 2.0).clamp(0.0, 1.0);
-      if (lineProgress <= 0) continue;
-
-      final path = Path();
-      final startX = 10.0 + rng.nextDouble() * 20;
-      final endX = size.width * (0.5 + rng.nextDouble() * 0.45) * lineProgress;
-
-      path.moveTo(startX, y);
-      for (double x = startX; x < endX; x += 8) {
-        final wobble = (rng.nextDouble() - 0.5) * 3;
-        path.lineTo(x, y + wobble);
-      }
-
-      canvas.drawPath(path, paint);
-
-      // Ogni tanto un cerchietto o stellina
-      if (i % 3 == 0 && lineProgress > 0.5) {
-        final cx = 10.0 + rng.nextDouble() * 30;
-        canvas.drawCircle(
-          Offset(cx, y),
-          4 + rng.nextDouble() * 3,
-          paint..strokeWidth = 1.2,
-        );
-        paint.strokeWidth = 1.5;
-      }
-    }
-
-    // Box scarabocchiato al centro
-    final boxProgress = ((progress * 3) - 1).clamp(0.0, 1.0);
-    if (boxProgress > 0) {
-      final boxPaint = Paint()
-        ..color = color.withOpacity(0.15)
-        ..strokeWidth = 1.8
-        ..style = PaintingStyle.stroke;
-
-      final bx = size.width * 0.15;
-      final by = size.height * 0.35;
-      final bw = size.width * 0.7 * boxProgress;
-      final bh = 50.0;
-
-      final boxPath = Path();
-      // Rettangolo leggermente storto
-      boxPath.moveTo(bx + 2, by - 1);
-      boxPath.lineTo(bx + bw - 3, by + 2);
-      boxPath.lineTo(bx + bw + 1, by + bh - 2);
-      boxPath.lineTo(bx - 1, by + bh + 1);
-      boxPath.close();
-
-      canvas.drawPath(boxPath, boxPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _LoadingScribblePainter oldDelegate) =>
-      progress != oldDelegate.progress;
-}
-
-/// Decorazione titolo: 0=cerchio, 1=rettangolo, 2=sottolineatura
-class _TitleDecorationPainter extends CustomPainter {
-  final int type;
-  final Color color;
-  final int seed;
-
-  _TitleDecorationPainter({
-    required this.type,
-    required this.color,
-    required this.seed,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withOpacity(0.3)
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final rng = math.Random(seed);
-
-    switch (type) {
-      case 0:
-        // Cerchio/ovale a mano libera attorno al testo
-        _drawHanddrawnEllipse(canvas, size, paint, rng);
-        break;
-      case 1:
-        // Rettangolo a mano libera
-        _drawHanddrawnRect(canvas, size, paint, rng);
-        break;
-      case 2:
-        // Doppia sottolineatura ondulata
-        _drawHanddrawnUnderline(canvas, size, paint, rng);
-        break;
-    }
-  }
-
-  void _drawHanddrawnEllipse(
-      Canvas canvas, Size size, Paint paint, math.Random rng) {
-    final path = Path();
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final rx = size.width / 2 + 4;
-    final ry = size.height / 2 + 4;
-
-    for (int i = 0; i <= 36; i++) {
-      final angle = (i / 36) * 2 * math.pi;
-      final wobble = (rng.nextDouble() - 0.5) * 3;
-      final x = cx + (rx + wobble) * math.cos(angle);
-      final y = cy + (ry + wobble) * math.sin(angle);
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawHanddrawnRect(
-      Canvas canvas, Size size, Paint paint, math.Random rng) {
-    final path = Path();
-    final w = (rng.nextDouble() - 0.5) * 2; // wobble
-
-    path.moveTo(-4 + w, -3 + w);
-    path.lineTo(size.width + 4 - w, -2 + w);
-    path.lineTo(size.width + 3 + w, size.height + 3 - w);
-    path.lineTo(-3 - w, size.height + 4 + w);
-    path.close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawHanddrawnUnderline(
-      Canvas canvas, Size size, Paint paint, math.Random rng) {
-    // Prima linea
-    final path1 = Path();
-    path1.moveTo(0, size.height + 2);
-    for (double x = 0; x < size.width; x += 6) {
-      final wobble = (rng.nextDouble() - 0.5) * 2;
-      path1.lineTo(x, size.height + 2 + wobble);
-    }
-    canvas.drawPath(path1, paint);
-
-    // Seconda linea (leggermente sotto)
-    final path2 = Path();
-    path2.moveTo(4, size.height + 6);
-    for (double x = 4; x < size.width - 8; x += 6) {
-      final wobble = (rng.nextDouble() - 0.5) * 2;
-      path2.lineTo(x, size.height + 6 + wobble);
-    }
-    canvas.drawPath(path2, paint..strokeWidth = 1.5);
-  }
-
-  @override
-  bool shouldRepaint(covariant _TitleDecorationPainter oldDelegate) =>
-      type != oldDelegate.type || color != oldDelegate.color;
-}
-
-/// Box disegnato a mano attorno alle keyword
-class _HanddrawnBoxPainter extends CustomPainter {
-  final Color color;
-  final int seed;
-  final bool filled;
-
-  _HanddrawnBoxPainter({
-    required this.color,
-    required this.seed,
-    this.filled = false,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rng = math.Random(seed);
-    final paint = Paint()
-      ..color = color.withOpacity(filled ? 0.08 : 0.25)
-      ..strokeWidth = 1.5
-      ..style = filled ? PaintingStyle.fill : PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    final w = (rng.nextDouble() - 0.5) * 2;
-
-    // Rettangolo con angoli leggermente imprecisi
-    path.moveTo(-2 + w, -1 + w * 0.5);
-    path.lineTo(size.width + 2 - w, -2 + w);
-    path.lineTo(size.width + 1 + w * 0.5, size.height + 2 - w);
-    path.lineTo(-1 - w * 0.5, size.height + 1 + w);
-    path.close();
-
-    canvas.drawPath(path, paint);
-
-    // Se riempito, disegna anche il bordo
-    if (filled) {
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = color.withOpacity(0.25)
-          ..strokeWidth = 1.5
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _HanddrawnBoxPainter oldDelegate) =>
-      color != oldDelegate.color || seed != oldDelegate.seed;
-}
-
-/// Freccia disegnata a mano per i bullet
-class _HanddrawnArrowPainter extends CustomPainter {
-  final Color color;
-  final int seed;
-
-  _HanddrawnArrowPainter({required this.color, required this.seed});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rng = math.Random(seed);
-    final arrowType = seed % 4;
-
-    final paint = Paint()
-      ..color = color.withOpacity(0.7)
-      ..strokeWidth = 1.8
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final w = (rng.nextDouble() - 0.5) * 1.5;
-
-    switch (arrowType) {
-      case 0:
-        // Freccia → classica
-        final path = Path()
-          ..moveTo(0, size.height / 2 + w)
-          ..lineTo(size.width - 5, size.height / 2 - w)
-          ..moveTo(size.width - 8, size.height / 2 - 4 + w)
-          ..lineTo(size.width - 3, size.height / 2 - w)
-          ..lineTo(size.width - 8, size.height / 2 + 4 + w);
-        canvas.drawPath(path, paint);
-        break;
-      case 1:
-        // Pallino pieno
-        canvas.drawCircle(
-          Offset(size.width / 2, size.height / 2),
-          4,
-          paint..style = PaintingStyle.fill,
-        );
-        break;
-      case 2:
-        // Asterisco *
-        final cx = size.width / 2;
-        final cy = size.height / 2;
-        for (int i = 0; i < 3; i++) {
-          final angle = i * math.pi / 3;
-          canvas.drawLine(
-            Offset(cx + 5 * math.cos(angle), cy + 5 * math.sin(angle)),
-            Offset(cx - 5 * math.cos(angle), cy - 5 * math.sin(angle)),
-            paint..style = PaintingStyle.stroke,
-          );
-        }
-        break;
-      case 3:
-        // Trattino ondulato ~
-        final path = Path()..moveTo(2, size.height / 2);
-        for (double x = 2; x < size.width - 2; x += 4) {
-          final y =
-              size.height / 2 + math.sin(x * 0.8) * 3 + w;
-          path.lineTo(x, y);
-        }
-        canvas.drawPath(path, paint);
-        break;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _HanddrawnArrowPainter oldDelegate) =>
-      seed != oldDelegate.seed;
-}
-
-/// Piccoli scarabocchi/simboli accanto alle keyword
-class _SmallDoodlePainter extends CustomPainter {
-  final int type;
-  final Color color;
-
-  _SmallDoodlePainter({required this.type, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withOpacity(0.5)
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final r = size.width / 2 - 1;
-
-    switch (type) {
-      case 0:
-        // Stellina
-        final path = Path();
-        for (int i = 0; i < 5; i++) {
-          final angle = (i * 4 * math.pi / 5) - math.pi / 2;
-          final x = cx + r * math.cos(angle);
-          final y = cy + r * math.sin(angle);
-          if (i == 0) {
-            path.moveTo(x, y);
-          } else {
-            path.lineTo(x, y);
-          }
-        }
-        path.close();
-        canvas.drawPath(path, paint);
-        break;
-      case 1:
-        // Rombo
-        final path = Path()
-          ..moveTo(cx, cy - r)
-          ..lineTo(cx + r, cy)
-          ..lineTo(cx, cy + r)
-          ..lineTo(cx - r, cy)
-          ..close();
-        canvas.drawPath(path, paint);
-        break;
-      case 2:
-        // Cerchietto
-        canvas.drawCircle(Offset(cx, cy), r, paint);
-        break;
-      case 3:
-        // Quadratino
-        canvas.drawRect(
-          Rect.fromCenter(center: Offset(cx, cy), width: r * 2, height: r * 2),
-          paint,
-        );
-        break;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SmallDoodlePainter oldDelegate) =>
-      type != oldDelegate.type;
-}
-
-/// Freccia di connessione tra sezioni
-class _ConnectionArrowPainter extends CustomPainter {
-  final Color color;
-  final int seed;
-
-  _ConnectionArrowPainter({required this.color, required this.seed});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rng = math.Random(seed);
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final style = seed % 3;
-
-    switch (style) {
-      case 0:
-        // Freccia curva verso il basso
-        final path = Path();
-        final startX = 20.0 + rng.nextDouble() * 30;
-        path.moveTo(startX, 2);
-        path.quadraticBezierTo(
-          startX + 30,
-          size.height + 5,
-          startX + 60,
-          size.height - 2,
-        );
-        // Punta
-        path.moveTo(startX + 55, size.height - 7);
-        path.lineTo(startX + 62, size.height - 2);
-        path.lineTo(startX + 55, size.height + 2);
-        canvas.drawPath(path, paint);
-        break;
-      case 1:
-        // Linea tratteggiata orizzontale con freccia
-        final y = size.height / 2;
-        for (double x = 10; x < size.width * 0.4; x += 8) {
-          canvas.drawLine(Offset(x, y), Offset(x + 4, y), paint);
-        }
-        break;
-      case 2:
-        // Tre puntini verticali ⋮
-        for (int i = 0; i < 3; i++) {
-          canvas.drawCircle(
-            Offset(25, 3.0 + i * 7),
-            2,
-            paint..style = PaintingStyle.fill,
-          );
-        }
-        paint.style = PaintingStyle.stroke;
-        break;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ConnectionArrowPainter oldDelegate) =>
-      seed != oldDelegate.seed;
-}
-
-/// Sottolineatura ondulata per il testo
-class _WavyUnderlinePainter extends CustomPainter {
-  final Color color;
-  final int seed;
-
-  _WavyUnderlinePainter({required this.color, required this.seed});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    path.moveTo(0, size.height - 1);
-
-    for (double x = 0; x < size.width; x += 6) {
-      final y = size.height - 1 + math.sin(x * 0.5 + seed) * 2;
-      path.lineTo(x, y);
-    }
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _WavyUnderlinePainter oldDelegate) =>
-      seed != oldDelegate.seed;
 }
 
 // =======================================================================
 // MODELLI DATI
 // =======================================================================
 
-enum _NoteItemType { keyword, bullet, note }
-
-class _NoteItem {
-  final String text;
-  final _NoteItemType type;
-
-  const _NoteItem({required this.text, required this.type});
-}
-
-class _NoteSection {
+class _TextSection {
   final String title;
-  final List<_NoteItem> items;
+  final List<String> paragraphs;
 
-  const _NoteSection({required this.title, required this.items});
+  const _TextSection({required this.title, required this.paragraphs});
 }
