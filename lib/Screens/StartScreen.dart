@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:progetto_finale/widget/BookSelectionWidget.dart';
+import '../utils/app_enums.dart';
 
 class Startscreen extends StatefulWidget {
   const Startscreen({super.key});
@@ -9,17 +10,14 @@ class Startscreen extends StatefulWidget {
 }
 
 class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin {
-  sizeHeight(double percentage) {
-    return MediaQuery.of(context).size.height * percentage;
-  }
+  sizeHeight(double percentage) =>
+      MediaQuery.of(context).size.height * percentage;
 
-  sizeWidth(double percentage) {
-    return MediaQuery.of(context).size.width * percentage;
-  }
+  sizeWidth(double percentage) =>
+      MediaQuery.of(context).size.width * percentage;
 
-  bool isSelectedMedia = true;
-  bool isSelectedSuperior = false;
-  bool isSelectedUniversity = false;
+  // Un singolo enum al posto di tre booleani: stato coerente garantito
+  SchoolLevel _selectedLevel = SchoolLevel.media;
 
   late AnimationController _backgroundController;
   late AnimationController _pulseController;
@@ -28,13 +26,11 @@ class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin
   void initState() {
     super.initState();
 
-    // Animazione background animato
     _backgroundController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat();
 
-    // Animazione pulse per il pulsante
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -48,37 +44,26 @@ class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin
     super.dispose();
   }
 
-  String _getBackgroundImage() {
-    if (isSelectedMedia) {
-      return 'assets/backgrounds/green_nature.jpg';
-    } else if (isSelectedSuperior) {
-      return 'assets/backgrounds/blue_study.jpg';
-    } else if (isSelectedUniversity) {
-      return 'assets/backgrounds/red_sunset.jpg';
-    }
-    return 'assets/backgrounds/green_nature.jpg';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // Background image dinamico basato sul livello selezionato
+          // Background dinamico basato sul livello selezionato
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 800),
             child: Container(
-              key: ValueKey<String>(_getBackgroundImage()),
+              key: ValueKey<String>(_selectedLevel.backgroundImage),
               decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage(_getBackgroundImage()),
+                  image: AssetImage(_selectedLevel.backgroundImage),
                   fit: BoxFit.cover,
                 ),
               ),
             ),
           ),
 
-          // Overlay scuro per migliorare la leggibilità
+          // Overlay scuro per leggibilità
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -99,7 +84,7 @@ class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin
             children: [
               SizedBox(height: sizeWidth(0.01)),
 
-              // Titolo
+              // Titolo con shadow colorata in base al livello
               Text(
                 'che tipo di studente sei?',
                 style: TextStyle(
@@ -113,15 +98,9 @@ class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin
                       offset: const Offset(0, 4),
                     ),
                     Shadow(
-                      color: isSelectedMedia
-                          ? Colors.green
-                          : isSelectedSuperior
-                              ? Colors.blue
-                              : isSelectedUniversity
-                                  ? Colors.red
-                                  : Colors.white,
+                      color: _selectedLevel.color,
                       blurRadius: 40,
-                      offset: const Offset(0, 0),
+                      offset: Offset.zero,
                     ),
                   ],
                 ),
@@ -133,40 +112,22 @@ class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   BookSelectionWidget(
-                    isSelected: isSelectedMedia,
-                    bookColor: const Color(0xFF4CAF50), // Verde
+                    isSelected: _selectedLevel == SchoolLevel.media,
+                    bookColor: const Color(0xFF4CAF50),
                     label: 'Medie',
-                    onTap: () {
-                      setState(() {
-                        isSelectedMedia = true;
-                        isSelectedSuperior = false;
-                        isSelectedUniversity = false;
-                      });
-                    },
+                    onTap: () => setState(() => _selectedLevel = SchoolLevel.media),
                   ),
                   BookSelectionWidget(
-                    isSelected: isSelectedSuperior,
-                    bookColor: const Color(0xFF2196F3), // Blu
+                    isSelected: _selectedLevel == SchoolLevel.superior,
+                    bookColor: const Color(0xFF2196F3),
                     label: 'Superiori',
-                    onTap: () {
-                      setState(() {
-                        isSelectedMedia = false;
-                        isSelectedSuperior = true;
-                        isSelectedUniversity = false;
-                      });
-                    },
+                    onTap: () => setState(() => _selectedLevel = SchoolLevel.superior),
                   ),
                   BookSelectionWidget(
-                    isSelected: isSelectedUniversity,
-                    bookColor: const Color(0xFFE53935), // Rosso
+                    isSelected: _selectedLevel == SchoolLevel.university,
+                    bookColor: const Color(0xFFE53935),
                     label: 'Università',
-                    onTap: () {
-                      setState(() {
-                        isSelectedMedia = false;
-                        isSelectedSuperior = false;
-                        isSelectedUniversity = true;
-                      });
-                    },
+                    onTap: () => setState(() => _selectedLevel = SchoolLevel.university),
                   ),
                 ],
               ),
@@ -176,18 +137,14 @@ class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin
                 animation: _pulseController,
                 builder: (context, child) {
                   return Transform.scale(
-                    scale: 0.8 +(_pulseController.value * 0.25),
+                    scale: 0.8 + (_pulseController.value * 0.25),
                     child: GestureDetector(
                       onTap: () {
-                        Navigator.pushNamed(context, '/lesson', arguments: {
-                          'schoolLevel': isSelectedMedia
-                              ? 'media'
-                              : isSelectedSuperior
-                                  ? 'superior'
-                                  : isSelectedUniversity
-                                      ? 'university'
-                                      : 'none',
-                        });
+                        Navigator.pushNamed(
+                          context,
+                          '/lesson',
+                          arguments: {'schoolLevel': _selectedLevel.routeArgument},
+                        );
                       },
                       child: Container(
                         decoration: BoxDecoration(
@@ -207,7 +164,8 @@ class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin
                           ],
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 50),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 50),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -242,5 +200,4 @@ class _StartscreenState extends State<Startscreen> with TickerProviderStateMixin
       ),
     );
   }
-
 }

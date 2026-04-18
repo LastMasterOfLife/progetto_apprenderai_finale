@@ -25,6 +25,7 @@ import 'OwlFaceWidget.dart';
 import 'BookPainters.dart';
 import '../utils/ChatMessage.dart';
 import '../utils/StickyNote.dart';
+import '../utils/app_enums.dart';
 
 /// La pagina a destra con i segnalibri (Note & Chat Hooty)
 class RightPageLayer extends StatelessWidget {
@@ -32,8 +33,8 @@ class RightPageLayer extends StatelessWidget {
   final double height;
   final Color color;
   final Color levelColor;
-  final String? activeTab;
-  final ValueChanged<String?> onTabChanged;
+  final BookmarkTab? activeTab;
+  final ValueChanged<BookmarkTab?> onTabChanged;
   // Notes
   final List<StickyNote> notes;
   final VoidCallback onAddNote;
@@ -46,6 +47,9 @@ class RightPageLayer extends StatelessWidget {
   final OwlEyeController owlController;
   final bool isSendingChat;
   final VoidCallback onSendChat;
+
+  /// Cancella la chat corrente e ne inizia una nuova
+  final VoidCallback onNewChat;
 
   const RightPageLayer({
     super.key,
@@ -65,35 +69,26 @@ class RightPageLayer extends StatelessWidget {
     required this.owlController,
     required this.isSendingChat,
     required this.onSendChat,
+    required this.onNewChat,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTapDown: (details) {
-        debugPrint('=== TAP su RightPageLayer === posizione: ${details.localPosition}');
-      },
-      child: Container(
+    return Container(
         width: width,
         height: height,
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.circular(4),
-          // DEBUG: bordo viola per visualizzare i limiti della pagina destra
-          border: Border.all(color: Colors.purple.withOpacity(0.1), width: 2),
         ),
         child: Stack(
           children: [
           // Page content with padding (leave top space for bookmark tabs)
           Positioned.fill(
-            top: height * 0.25 + 8, // Below the bookmark tabs area
-            child: Container(
-              color: Colors.green.withOpacity(0.01), // DEBUG: visualize content area
-              child: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-                child: _buildPageContent(),
-              ),
+            top: height * 0.25 + 8,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+              child: _buildPageContent(),
             ),
           ),
           // Bookmark tabs inside the page, at top-right
@@ -105,14 +100,14 @@ class RightPageLayer extends StatelessWidget {
                 _buildBookmarkTab(
                   label: 'Note',
                   icon: Icons.sticky_note_2_outlined,
-                  tabId: 'notes',
+                  tab: BookmarkTab.notes,
                   color: const Color(0xFFFFEB3B),
                 ),
                 const SizedBox(width: 6),
                 _buildBookmarkTab(
                   label: 'Hooty',
                   icon: Icons.chat_bubble_outline,
-                  tabId: 'chat',
+                  tab: BookmarkTab.chat,
                   color: const Color(0xFF5C8EC8),
                 ),
               ],
@@ -120,42 +115,33 @@ class RightPageLayer extends StatelessWidget {
           ),
         ],
       ),
-    ),
     );
   }
 
   Widget _buildPageContent() {
-    if (activeTab == 'notes') {
-      return _buildNotesView();
-    } else if (activeTab == 'chat') {
+    if (activeTab == BookmarkTab.chat) {
       return _buildChatView();
     }
-    // Default: notes
+    // Default (notes o null): mostra le note
     return _buildNotesView();
   }
 
   Widget _buildBookmarkTab({
     required String label,
     required IconData icon,
-    required String tabId,
+    required BookmarkTab tab,
     required Color color,
   }) {
-    final bool isActive = activeTab == tabId;
+    final bool isActive = activeTab == tab;
     const double tabWidth = 48;
     final double tabHeight = height * 0.22;
 
-    // DEBUG: background color to visualize the clickable area of each bookmark tab
     return Container(
-      color: tabId == 'notes'
-          ? Colors.red.withOpacity(0.01)
-          : Colors.blue.withOpacity(0.01),
+      color: Colors.transparent,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            debugPrint('=== TAP SEGNALIBRO === "$label" (tabId: $tabId) cliccato! activeTab corrente: $activeTab');
-            onTabChanged(tabId);
-          },
+          onTap: () => onTabChanged(tab),
           child: SizedBox(
             width: tabWidth,
             height: tabHeight + 12,
@@ -386,6 +372,7 @@ class RightPageLayer extends StatelessWidget {
           listenable: owlController,
           builder: (context, _) {
             return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 OwlFaceWidget(
                   eyeOffset: owlController.eyeOffset,
@@ -393,23 +380,64 @@ class RightPageLayer extends StatelessWidget {
                   isBlinking: owlController.isBlinking,
                 ),
                 const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Hooty',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: levelColor,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Hooty',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: levelColor,
+                        ),
+                      ),
+                      Text(
+                        'Scrivi qui, la risposta apparirà a sinistra',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.black54,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Bottone "Nuova chat" — visibile solo se c'è già una conversazione
+                if (userMessages.isNotEmpty)
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: onNewChat,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: levelColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: levelColor.withOpacity(0.3), width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_comment_outlined,
+                                size: 12, color: levelColor),
+                            const SizedBox(width: 3),
+                            Text(
+                              'Nuova',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: levelColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    Text(
-                      'Scrivi qui, la risposta apparirà a sinistra',
-                      style: TextStyle(fontSize: 10, color: Colors.black54, fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                ),
+                  ),
               ],
             );
           },

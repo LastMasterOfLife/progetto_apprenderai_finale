@@ -19,6 +19,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math' as math;
+import '../utils/constants.dart';
 
 /// Modalità di visualizzazione della pagina sinistra
 enum ContentViewMode {
@@ -248,35 +249,26 @@ class _ContentPageLayerState extends State<ContentPageLayer>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Icona 1: Testo pulito (senza formattazione)
+          // Icona 1: Testo semplice — torna sempre alla vista testo
           _buildSidePanelIcon(
             icon: Icons.text_snippet_outlined,
             tooltip: 'Testo semplice',
             isActive: _viewMode == ContentViewMode.plainText,
-            onTap: () {
-              setState(() {
-                _viewMode = _viewMode == ContentViewMode.plainText
-                    ? ContentViewMode.plainText
-                    : ContentViewMode.plainText;
-              });
-            },
+            onTap: () => setState(() => _viewMode = ContentViewMode.plainText),
           ),
           const SizedBox(height: 12),
-          // Icona 2: Mappa concettuale
+          // Icona 2: Mappa concettuale — alterna tra testo e mappa
           _buildSidePanelIcon(
             icon: Icons.account_tree_outlined,
             tooltip: 'Mappa concettuale',
             isActive: _viewMode == ContentViewMode.custom,
             onTap: () {
-              setState(() {
-                _viewMode = _viewMode == ContentViewMode.custom
-                    ? ContentViewMode.custom
-                    : ContentViewMode.custom;
-              });
-              // Quando si attiva la vista mappa, lancia la chiamata API
-              if (_viewMode == ContentViewMode.custom) {
-                _fetchMap();
-              }
+              final goingToMap = _viewMode != ContentViewMode.custom;
+              setState(() => _viewMode = goingToMap
+                  ? ContentViewMode.custom
+                  : ContentViewMode.plainText);
+              // Chiama l'API solo quando si ATTIVA la mappa (non quando si disattiva)
+              if (goingToMap) _fetchMap();
             },
           ),
         ],
@@ -338,7 +330,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   // =====================================================================
 
   /// Flusso completo: genera DOT → converte in SVG → mostra.
-  /// Viene invocata automaticamente quando si attiva la vista custom
+  /// Viene invocata automaticamente quando si attiva la vista mappa
   /// e il topic è cambiato rispetto all'ultima richiesta.
   Future<void> _fetchMap() async {
     final topic = widget.chapterTitle.trim();
@@ -355,38 +347,45 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     });
 
     try {
-      // === STEP 1: Genera la stringa DOT dall'API ===
-      final dotUrl = Uri.parse(
-        'https://n8ndev.inforelea.academy/webhook/generate-map',
-      );
+      // === STEP 1: Genera la stringa DOT tramite webhook n8n ===
+      debugPrint('=== Map API Call (Step 1: DOT) === Topic: $topic');
 
-      debugPrint('=== Map API Call (Step 1: DOT) ===');
-      debugPrint('Topic: $topic');
-
-      final dotResponse = await http.post(
-        dotUrl,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'topic': topic,
-          'depth': 3,
-        }),
-      );
+      final dotResponse = await http
+          .post(
+            Uri.parse(ApiConstants.generateMapEndpoint),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({"topic": topic, "depth": 3}),
+          )
+          .timeout(
+            ApiConstants.mapRequestTimeout,
+            onTimeout: () => throw Exception(
+              'Timeout: il server impiega troppo a rispondere. Riprova tra qualche secondo.',
+            ),
+          );
 
       debugPrint('DOT Response status: ${dotResponse.statusCode}');
 
       if (dotResponse.statusCode != 200) {
         setState(() {
-          _mapError = 'Errore generazione mappa (${dotResponse.statusCode})';
+          _mapError =
+              'Errore generazione mappa (HTTP ${dotResponse.statusCode}).\n'
+              'Risposta: ${dotResponse.body.substring(0, dotResponse.body.length.clamp(0, 200))}';
         });
         return;
       }
 
-      final dotString = dotResponse.body;
-      debugPrint('DOT ricevuto (${dotString.length} chars)');
+      // --- Estrai la stringa DOT dalla risposta ---
+      // n8n può rispondere con JSON (es. {"dot":"...", "output":"..."})
+      // oppure con il testo DOT direttamente. Gestiamo entrambi i casi.
+      final dotString = _extractDotFromResponse(dotResponse.body);
+      debugPrint('DOT estratto (${dotString.length} chars): ${dotString.substring(0, dotString.length.clamp(0, 100))}');
 
-      setState(() {
-        _mapDotString = dotString;
-      });
+      if (dotString.isEmpty) {
+        setState(() => _mapError = 'La risposta del server non contiene una mappa DOT valida.');
+        return;
+      }
+
+      setState(() => _mapDotString = dotString);
 
       // === STEP 2: Converti DOT in SVG tramite QuickChart ===
       final svgString = await _fetchSvgFromDot(dotString);
@@ -397,45 +396,92 @@ class _ContentPageLayerState extends State<ContentPageLayer>
           _lastMapTopic = topic;
         });
       } else {
-        setState(() {
-          _mapError = 'Errore nella conversione DOT → SVG';
-        });
+        setState(() => _mapError = 'Errore nella conversione DOT → SVG.\nLa mappa DOT è stata ricevuta ma non è stato possibile renderizzarla.');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       debugPrint('Errore nella chiamata API mappa: $e');
-      setState(() {
-        _mapError = 'Errore di connessione: $e';
-      });
+      setState(() => _mapError = e.toString().replaceFirst('Exception: ', ''));
+    } catch (e) {
+      debugPrint('Errore inatteso nella mappa: $e');
+      setState(() => _mapError = 'Errore inatteso: $e');
     } finally {
-      setState(() {
-        _isLoadingMap = false;
-      });
+      setState(() => _isLoadingMap = false);
     }
+  }
+
+  /// Estrae la stringa DOT dalla risposta raw del server.
+  ///
+  /// Supporta tre formati:
+  ///   1. Testo DOT diretto (inizia con "digraph" o "graph")
+  ///   2. JSON con campo "dot", "output", "graph", "answer" o "result"
+  ///   3. JSON con campo "data" che contiene a sua volta la stringa DOT
+  String _extractDotFromResponse(String responseBody) {
+    final trimmed = responseBody.trim();
+
+    // Formato 1: DOT diretto
+    if (trimmed.startsWith('digraph') || trimmed.startsWith('graph ') ||
+        trimmed.startsWith('strict ')) {
+      return trimmed;
+    }
+
+    // Formato 2: JSON
+    try {
+      final parsed = json.decode(trimmed);
+      if (parsed is Map) {
+        // Campi comuni usati da n8n
+        for (final key in ['dot', 'output', 'graph', 'answer', 'result', 'data']) {
+          final value = parsed[key];
+          if (value is String && value.trim().isNotEmpty) {
+            final inner = value.trim();
+            // Potrebbe essere DOT diretto o JSON annidato
+            if (inner.startsWith('digraph') || inner.startsWith('graph ') ||
+                inner.startsWith('strict ')) {
+              return inner;
+            }
+            // Tenta parsing JSON annidato
+            try {
+              final nested = json.decode(inner);
+              if (nested is Map) {
+                for (final nk in ['dot', 'output', 'graph']) {
+                  if (nested[nk] is String) return (nested[nk] as String).trim();
+                }
+              }
+            } catch (_) {}
+            // Usa il valore così com'è (potrebbe essere DOT senza prefisso)
+            return inner;
+          }
+        }
+        // Se la mappa ha un solo valore stringa, usalo
+        final stringValues = parsed.values.whereType<String>().toList();
+        if (stringValues.length == 1) return stringValues.first.trim();
+      }
+    } catch (_) {
+      // Non è JSON valido — fallback al body grezzo
+    }
+
+    // Fallback: usa il body così com'è
+    return trimmed;
   }
 
   /// Converte una stringa DOT in SVG usando QuickChart.io
   Future<String?> _fetchSvgFromDot(String dotString) async {
     try {
-      final url = Uri.parse('https://quickchart.io/graphviz');
-
       debugPrint('=== QuickChart API Call (Step 2: SVG) ===');
 
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'graph': dotString,
-          'format': 'svg',
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('https://quickchart.io/graphviz'),
+            headers: {'Content-Type': 'application/json'},
+            body: json.encode({'graph': dotString, 'format': 'svg'}),
+          )
+          .timeout(const Duration(seconds: 30));
 
-      debugPrint('SVG Response status: ${response.statusCode}');
-      debugPrint('SVG Response length: ${response.body.length}');
+      debugPrint('SVG Response status: ${response.statusCode}, length: ${response.body.length}');
 
       if (response.statusCode == 200) {
         return response.body;
       } else {
-        debugPrint('QuickChart error: ${response.body}');
+        debugPrint('QuickChart error: ${response.body.substring(0, response.body.length.clamp(0, 300))}');
         return null;
       }
     } catch (e) {

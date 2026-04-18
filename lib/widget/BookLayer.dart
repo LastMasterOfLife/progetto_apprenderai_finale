@@ -37,6 +37,10 @@ class BookLayer extends StatelessWidget {
   final Function(String)? onChapterSelected;
   final double rotationY;
 
+  /// true durante il fetch iniziale dell'indice — mostra uno spinner al posto
+  /// del messaggio "Caricamento indice..." già esistente nel testo statico.
+  final bool isLoading;
+
   const BookLayer({
     super.key,
     required this.width,
@@ -48,6 +52,7 @@ class BookLayer extends StatelessWidget {
     this.levelColor = Colors.black,
     this.onChapterSelected,
     this.rotationY = 0.0,
+    this.isLoading = false,
   });
 
   @override
@@ -176,18 +181,39 @@ class BookLayer extends StatelessWidget {
         const SizedBox(height: 8),
         // Lista capitoli
         Expanded(
-          child: chaptersIndex.isEmpty
+          child: isLoading
               ? Center(
-                  child: Text(
-                    'Caricamento indice...',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.black54,
-                      fontStyle: FontStyle.italic,
-                    ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(levelColor),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Caricamento indice...',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.black54,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
                   ),
                 )
-              : _buildChaptersListWidget(),
+              : chaptersIndex.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Nessun capitolo disponibile.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black54,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    )
+                  : _buildChaptersListWidget(),
         ),
       ],
     );
