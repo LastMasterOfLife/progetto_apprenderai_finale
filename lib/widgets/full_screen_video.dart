@@ -12,13 +12,14 @@
 //     con la UI sovrapposta.
 //   - Usa media_kit per la riproduzione multipiattaforma.
 //
-// Usato in: SplashScreen
+// Usato in: SplashScreen, LoginScreen
 // =============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+/// Widget che riproduce il video di sfondo a schermo intero.
 class FullScreenVideo extends StatefulWidget {
   const FullScreenVideo({super.key});
 
@@ -33,8 +34,6 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
   @override
   void initState() {
     super.initState();
-    // se il player esiste già, deve solo far ripartire l'audio e il video
-
     player = Player();
     controller = VideoController(player);
 
@@ -59,12 +58,11 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: IgnorePointer( // 🔥 evita click/tap e overlay che appare al mouse
+            child: IgnorePointer(
               ignoring: true,
               child: Video(
                 controller: controller,
                 fit: BoxFit.cover,
-                // 🔥 forza “nessun controllo”
                 controls: NoVideoControls,
               ),
             ),

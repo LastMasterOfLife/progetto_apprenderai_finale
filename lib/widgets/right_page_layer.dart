@@ -7,7 +7,7 @@
 //
 //   - "Note" (icona sticky note, colore giallo): apre la vista note adesive
 //     dove l'utente può creare, modificare e cancellare appunti personali.
-//   - "Hooty" (icona chat, colore marrone): apre la chat con il gufo
+//   - "Hooty" (icona chat, colore blu): apre la chat con il gufo
 //     assistente Hooty, che risponde usando il backend RAG.
 //
 // I segnalibri funzionano come toggle: cliccando lo stesso tab si chiude
@@ -16,15 +16,18 @@
 //
 // Quando nessun tab è attivo, mostra un messaggio di istruzioni.
 //
+// Nota: usa sempre colori "carta vintage" per il background — NON usa il
+// tema app (light/dark) per mantenere la metafora fisica del libro.
+//
 // Usato in: BookStackWidget (quando il libro è aperto e la pagina
 //           contenuto è visibile)
 // =============================================================================
 
 import 'package:flutter/material.dart';
-import 'OwlFaceWidget.dart';
-import 'BookPainters.dart';
-import '../utils/ChatMessage.dart';
-import '../utils/StickyNote.dart';
+import 'owl_face_widget.dart';
+import 'book_painters.dart';
+import '../models/chat_message.dart';
+import '../models/sticky_note.dart';
 import '../utils/app_enums.dart';
 
 /// La pagina a destra con i segnalibri (Note & Chat Hooty)
@@ -35,11 +38,13 @@ class RightPageLayer extends StatelessWidget {
   final Color levelColor;
   final BookmarkTab? activeTab;
   final ValueChanged<BookmarkTab?> onTabChanged;
+
   // Notes
   final List<StickyNote> notes;
   final VoidCallback onAddNote;
   final ValueChanged<int> onDeleteNote;
   final void Function(int, StickyNote) onUpdateNote;
+
   // Chat
   final List<ChatMessage> chatMessages;
   final TextEditingController chatController;
@@ -75,14 +80,14 @@ class RightPageLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Stack(
-          children: [
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Stack(
+        children: [
           // Page content with padding (leave top space for bookmark tabs)
           Positioned.fill(
             top: height * 0.25 + 8,
@@ -168,7 +173,8 @@ class RightPageLayer extends StatelessWidget {
                         label,
                         style: TextStyle(
                           fontSize: 10,
-                          fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                          fontWeight:
+                              isActive ? FontWeight.bold : FontWeight.w500,
                           color: isActive ? Colors.black87 : Colors.black54,
                         ),
                       ),
@@ -183,14 +189,18 @@ class RightPageLayer extends StatelessWidget {
     );
   }
 
-  // === Notes View ===
+  // ---------------------------------------------------------------------------
+  // Notes View
+  // ---------------------------------------------------------------------------
+
   Widget _buildNotesView() {
     return Column(
       children: [
         // Header
         Row(
           children: [
-            Icon(Icons.sticky_note_2, size: 20, color: const Color(0xFFFFEB3B)),
+            const Icon(Icons.sticky_note_2,
+                size: 20, color: Color(0xFFFFEB3B)),
             const SizedBox(width: 8),
             Text(
               'Le mie Note',
@@ -207,20 +217,23 @@ class RightPageLayer extends StatelessWidget {
                 onTap: onAddNote,
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFEB3B).withOpacity(0.3),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFFFEB3B), width: 1),
+                    border: Border.all(
+                        color: const Color(0xFFFFEB3B), width: 1),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.add, size: 14, color: Colors.black87),
-                      const SizedBox(width: 3),
-                      const Text(
+                      SizedBox(width: 3),
+                      Text(
                         'Nuova',
-                        style: TextStyle(fontSize: 11, color: Colors.black87),
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.black87),
                       ),
                     ],
                   ),
@@ -235,12 +248,13 @@ class RightPageLayer extends StatelessWidget {
         // Notes area
         Expanded(
           child: notes.isEmpty
-              ? Center(
+              ? const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.sticky_note_2_outlined, size: 48, color: Colors.black26),
-                      const SizedBox(height: 8),
+                      Icon(Icons.sticky_note_2_outlined,
+                          size: 48, color: Colors.black26),
+                      SizedBox(height: 8),
                       Text(
                         'Nessuna nota ancora.\nPremi "Nuova" per iniziare!',
                         textAlign: TextAlign.center,
@@ -310,25 +324,35 @@ class RightPageLayer extends StatelessWidget {
                     ),
                     decoration: const InputDecoration(
                       hintText: 'Titolo...',
-                      hintStyle: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black38),
+                      hintStyle: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black38),
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                       border: InputBorder.none,
                     ),
-                    onChanged: (val) => onUpdateNote(index, note.copyWith(title: val)),
+                    onChanged: (val) =>
+                        onUpdateNote(index, note.copyWith(title: val)),
                   ),
-                  Container(height: 1, color: Colors.black12, margin: const EdgeInsets.symmetric(vertical: 3)),
+                  Container(
+                      height: 1,
+                      color: Colors.black12,
+                      margin: const EdgeInsets.symmetric(vertical: 3)),
                   TextField(
                     maxLines: null,
-                    style: const TextStyle(fontSize: 10, color: Colors.black87, height: 1.4),
+                    style: const TextStyle(
+                        fontSize: 10, color: Colors.black87, height: 1.4),
                     decoration: const InputDecoration(
                       hintText: 'Scrivi...',
-                      hintStyle: TextStyle(fontSize: 10, color: Colors.black38),
+                      hintStyle:
+                          TextStyle(fontSize: 10, color: Colors.black38),
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                       border: InputBorder.none,
                     ),
-                    onChanged: (val) => onUpdateNote(index, note.copyWith(content: val)),
+                    onChanged: (val) =>
+                        onUpdateNote(index, note.copyWith(content: val)),
                   ),
                 ],
               ),
@@ -348,7 +372,8 @@ class RightPageLayer extends StatelessWidget {
                       color: Colors.black.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, size: 12, color: Colors.black54),
+                    child: const Icon(Icons.close,
+                        size: 12, color: Colors.black54),
                   ),
                 ),
               ),
@@ -359,11 +384,16 @@ class RightPageLayer extends StatelessWidget {
     );
   }
 
-  // === Chat View ===
-  // Mostra solo i messaggi dell'utente (le risposte di Hooty appaiono sulla pagina sinistra)
+  // ---------------------------------------------------------------------------
+  // Chat View
+  // ---------------------------------------------------------------------------
+
+  /// Mostra solo i messaggi dell'utente (le risposte di Hooty appaiono sulla
+  /// pagina sinistra)
   Widget _buildChatView() {
     // Filtra solo i messaggi dell'utente per la visualizzazione
-    final userMessages = chatMessages.where((m) => m.role == MessageRole.user).toList();
+    final userMessages =
+        chatMessages.where((m) => m.role == MessageRole.user).toList();
 
     return Column(
       children: [
@@ -392,7 +422,7 @@ class RightPageLayer extends StatelessWidget {
                           color: levelColor,
                         ),
                       ),
-                      Text(
+                      const Text(
                         'Scrivi qui, la risposta apparirà a sinistra',
                         style: TextStyle(
                           fontSize: 10,
@@ -448,16 +478,21 @@ class RightPageLayer extends StatelessWidget {
         // Solo messaggi utente
         Expanded(
           child: userMessages.isEmpty
-              ? Center(
+              ? const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      OwlFaceWidget(eyeOffset: 0, headSize: 70, isBlinking: false),
-                      const SizedBox(height: 10),
+                      OwlFaceWidget(
+                          eyeOffset: 0, headSize: 70, isBlinking: false),
+                      SizedBox(height: 10),
                       Text(
                         'Ciao! Sono Hooty!\nChiedimi qualsiasi cosa\nsu questo argomento!\n\nLa mia risposta apparirà\nsulla pagina a sinistra.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: Colors.black54, fontStyle: FontStyle.italic, height: 1.5),
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                            fontStyle: FontStyle.italic,
+                            height: 1.5),
                       ),
                     ],
                   ),
@@ -477,11 +512,17 @@ class RightPageLayer extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 6),
             child: Row(
               children: [
-                OwlFaceWidget(eyeOffset: owlController.eyeOffset, headSize: 22, isBlinking: false),
+                OwlFaceWidget(
+                    eyeOffset: owlController.eyeOffset,
+                    headSize: 22,
+                    isBlinking: false),
                 const SizedBox(width: 6),
                 Text(
                   'Hooty sta scrivendo sulla pagina...',
-                  style: TextStyle(fontSize: 11, color: levelColor, fontStyle: FontStyle.italic),
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: levelColor,
+                      fontStyle: FontStyle.italic),
                 ),
               ],
             ),
@@ -504,9 +545,11 @@ class RightPageLayer extends StatelessWidget {
                   style: const TextStyle(fontSize: 12),
                   decoration: InputDecoration(
                     hintText: 'Chiedi a Hooty...',
-                    hintStyle: TextStyle(fontSize: 12, color: Colors.black38),
+                    hintStyle:
+                        const TextStyle(fontSize: 12, color: Colors.black38),
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
                     border: InputBorder.none,
                   ),
                 ),
@@ -518,8 +561,9 @@ class RightPageLayer extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
                     padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(color: levelColor, shape: BoxShape.circle),
-                    child: Icon(Icons.send, size: 14, color: Colors.white),
+                    decoration: BoxDecoration(
+                        color: levelColor, shape: BoxShape.circle),
+                    child: const Icon(Icons.send, size: 14, color: Colors.white),
                   ),
                 ),
               ),
@@ -546,7 +590,8 @@ class RightPageLayer extends StatelessWidget {
               bottomLeft: Radius.circular(14),
               bottomRight: Radius.circular(4),
             ),
-            border: Border.all(color: levelColor.withOpacity(0.3), width: 1),
+            border:
+                Border.all(color: levelColor.withOpacity(0.3), width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -554,18 +599,23 @@ class RightPageLayer extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.question_answer, size: 12, color: levelColor.withOpacity(0.6)),
+                  Icon(Icons.question_answer,
+                      size: 12, color: levelColor.withOpacity(0.6)),
                   const SizedBox(width: 4),
                   Text(
                     'La tua domanda',
-                    style: TextStyle(fontSize: 9, color: levelColor.withOpacity(0.6), fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        fontSize: 9,
+                        color: levelColor.withOpacity(0.6),
+                        fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
               Text(
                 message.text,
-                style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.4),
+                style: const TextStyle(
+                    fontSize: 12, color: Colors.black87, height: 1.4),
               ),
             ],
           ),

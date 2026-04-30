@@ -14,7 +14,7 @@
 //   - Pannello destro (RightPageLayer): appare quando si seleziona un
 //     capitolo, con segnalibri per Note e Chat con Hooty.
 //   - Gestione stato segnalibri: note adesive (StickyNote) e messaggi
-//     chat con backend RAG (via HTTP POST a /rag).
+//     chat con backend RAG (via ApiService — nessun HTTP diretto qui).
 //   - Swipe zone sul bordo inferiore per aprire/chiudere il libro e
 //     tornare indietro dalla pagina contenuto.
 //
@@ -22,17 +22,15 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dart:math' as math;
-import 'OwlFaceWidget.dart';
-import 'BookLayer.dart';
-import 'ContentPageLayer.dart';
-import 'RightPageLayer.dart';
-import '../utils/ChatMessage.dart';
-import '../utils/StickyNote.dart';
+import 'owl_face_widget.dart';
+import 'book_layer.dart';
+import 'content_page_layer.dart';
+import 'right_page_layer.dart';
+import '../models/chat_message.dart';
+import '../models/sticky_note.dart';
 import '../utils/app_enums.dart';
-import '../utils/constants.dart';
+import '../services/api_service.dart';
 
 class BookStackWidget extends StatefulWidget {
   final String titleBook;
@@ -64,6 +62,17 @@ class BookStackWidget extends StatefulWidget {
 
 class _BookStackWidgetState extends State<BookStackWidget>
     with TickerProviderStateMixin {
+  // ---------------------------------------------------------------------------
+  // Service
+  // ---------------------------------------------------------------------------
+
+  /// Punto di accesso unico al backend — nessun http.post diretto in questo file.
+  final _api = const ApiService();
+
+  // ---------------------------------------------------------------------------
+  // Animation controllers
+  // ---------------------------------------------------------------------------
+
   late AnimationController _stackMoveController;
   late AnimationController _firstPageController;
   late AnimationController _secondPageController;
@@ -73,6 +82,10 @@ class _BookStackWidgetState extends State<BookStackWidget>
   late Animation<double> _firstPageRotation;
   late Animation<double> _secondPageRotation;
   late Animation<double> _thirdPageRotation;
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
 
   bool _isOpen = false;
   bool _isContentPageOpen = false;
@@ -222,6 +235,9 @@ class _BookStackWidgetState extends State<BookStackWidget>
     _fetchChapterContent(chapter);
     _thirdPageController.forward();
 
+    // Notifica LessonScreen per registrare la statistica
+    widget.onChapterSelected?.call(chapter);
+
     // Se il capitolo ha già una chat, scorri fino all'ultimo messaggio
     if (_chatHistories.containsKey(chapter) &&
         _chatHistories[chapter]!.isNotEmpty) {
@@ -250,31 +266,19 @@ class _BookStackWidgetState extends State<BookStackWidget>
     });
 
     try {
-      final String query =
-          "parlami di ${chapter.trim()}? (${_schoolLevel.apiLevelQuery})";
-
-      final response = await http.post(
-        Uri.parse(ApiConstants.ragEndpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          "query": query,
-          "num_results": 30,
-          "llm_mode": true,
-          "conversation_history": [],
-          "enable_tts": false,
-          "tts_voice": "",
-        }),
+      final content = await _api.fetchChapterContent(
+        topic: chapter,
+        level: _schoolLevel,
+        history: const [],
       );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        setState(() => _pageContent = data['answer'] ?? "Nessun contenuto trovato.");
-      } else {
-        setState(() => _pageContent = "Errore nel recupero del contenuto (HTTP ${response.statusCode}).");
-      }
+      setState(() => _pageContent = content);
+    } on ApiException catch (e) {
+      debugPrint('Errore RAG fetch capitolo: ${e.message}');
+      setState(() => _pageContent =
+          'Errore nel recupero del contenuto (HTTP ${e.statusCode ?? "?"}).');
     } catch (e) {
       debugPrint('Errore RAG fetch capitolo: $e');
-      setState(() => _pageContent = "Errore di connessione al server.");
+      setState(() => _pageContent = 'Errore di connessione al server.');
     } finally {
       setState(() => _isLoadingContent = false);
     }
@@ -307,10 +311,6 @@ class _BookStackWidgetState extends State<BookStackWidget>
     _scrollChatToBottom();
 
     try {
-      final contextSuffix = _selectedChapter.isNotEmpty
-          ? ' (argomento: $_selectedChapter)'
-          : '';
-
       final conversationHistory = _currentChatMessages
           .map((m) => {
                 'role': m.role == MessageRole.user ? 'user' : 'assistant',
@@ -318,34 +318,33 @@ class _BookStackWidgetState extends State<BookStackWidget>
               })
           .toList();
 
-      final response = await http.post(
-        Uri.parse(ApiConstants.ragEndpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'query': '$text$contextSuffix',
-          'num_results': 15,
-          'llm_mode': true,
-          'conversation_history': conversationHistory,
-          'enable_tts': false,
-          'tts_voice': '',
-        }),
+      final answerText = await _api.sendChatMessage(
+        question: text,
+        topic: _selectedChapter,
+        level: _schoolLevel,
+        history: conversationHistory,
       );
 
-      final String answerText;
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        answerText = data['answer'] ?? 'Non ho trovato una risposta.';
-      } else {
-        answerText = 'Ops! Errore nella risposta dal server (HTTP ${response.statusCode}).';
-      }
-
       setState(() {
-        // La risposta di Hooty aggiorna la pagina sinistra
+        // La risposta di Hooty aggiorna anche la pagina sinistra
         _pageContent = answerText;
         _chatHistories[_selectedChapter]!.add(ChatMessage(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
           role: MessageRole.assistant,
           text: answerText,
+          createdAt: DateTime.now(),
+        ));
+      });
+    } on ApiException catch (e) {
+      debugPrint('Errore chat RAG: ${e.message}');
+      const errorText =
+          'Ops! Errore nella risposta dal server.';
+      setState(() {
+        _pageContent = errorText;
+        _chatHistories[_selectedChapter]!.add(ChatMessage(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          role: MessageRole.assistant,
+          text: errorText,
           createdAt: DateTime.now(),
         ));
       });
@@ -447,12 +446,12 @@ class _BookStackWidgetState extends State<BookStackWidget>
 
   @override
   Widget build(BuildContext context) {
-    final thinBookWidth   = widget.bookWidth * 0.99;
-    final quartoBookWidth = widget.bookWidth * 0.97;
-    final terzoBookWidth  = widget.bookWidth * 0.95;
+    final thinBookWidth    = widget.bookWidth * 0.99;
+    final quartoBookWidth  = widget.bookWidth * 0.97;
+    final terzoBookWidth   = widget.bookWidth * 0.95;
     final secondoBookWidth = widget.bookWidth * 0.93;
-    final primoBookWidth  = widget.bookWidth * 0.91;
-    final mediumBookWidth = widget.bookWidth * 0.96;
+    final primoBookWidth   = widget.bookWidth * 0.91;
+    final mediumBookWidth  = widget.bookWidth * 0.96;
     const double swipeZoneHeight = 60;
 
     final double totalWidth =

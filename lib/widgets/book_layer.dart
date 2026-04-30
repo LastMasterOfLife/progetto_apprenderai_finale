@@ -18,12 +18,15 @@
 // da '\n'. Le righe che iniziano con "SUBJECT:" sono trattate come
 // intestazioni di materia, le altre come argomenti selezionabili.
 //
+// Nota: questo widget usa sempre colori "carta vintage" (#F3EBDD) —
+// NON usa il tema app (light/dark) per mantenere la metafora fisica del libro.
+//
 // Usato in: BookStackWidget (sia come layer decorativi che come indice)
 // =============================================================================
 
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'BookPainters.dart';
+import 'book_painters.dart';
 
 /// Singolo layer dello stack (pagina bianca o pagina indice)
 class BookLayer extends StatelessWidget {
@@ -94,8 +97,8 @@ class BookLayer extends StatelessWidget {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                       colors: [
-                        Color(0xFF150A09).withOpacity(0.6),
-                        Color(0xFF3E2723).withOpacity(0.4),
+                        const Color(0xFF150A09).withOpacity(0.6),
+                        const Color(0xFF3E2723).withOpacity(0.4),
                         Colors.transparent,
                       ],
                     ),
@@ -191,7 +194,7 @@ class BookLayer extends StatelessWidget {
                         valueColor: AlwaysStoppedAnimation<Color>(levelColor),
                       ),
                       const SizedBox(height: 12),
-                      Text(
+                      const Text(
                         'Caricamento indice...',
                         style: TextStyle(
                           fontSize: 13,
@@ -203,7 +206,7 @@ class BookLayer extends StatelessWidget {
                   ),
                 )
               : chaptersIndex.isEmpty
-                  ? Center(
+                  ? const Center(
                       child: Text(
                         'Nessun capitolo disponibile.',
                         style: TextStyle(
@@ -289,11 +292,11 @@ class BookLayer extends StatelessWidget {
                         Expanded(
                           child: Text(
                             line,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 12,
                               color: Colors.black87,
                               height: 1.4,
-                              fontWeight: isClickable ? FontWeight.w400 : FontWeight.w400,
+                              fontWeight: FontWeight.w400,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,

@@ -1,15 +1,42 @@
-import 'package:flutter/material.dart';
-import 'package:progetto_finale/widget/FullScreenVideo.dart';
-import 'dart:math' as math;
+// =============================================================================
+// SplashScreen — Schermata di avvio con animazione logo e typewriter
+// =============================================================================
+//
+// Prima schermata mostrata all'avvio. Gestisce tre casi:
+//   1. Login disabilitato (AppConfig.enableLogin = false) → va direttamente
+//      a StartScreen, bypassa completamente il flusso di autenticazione.
+//   2. Utente non autenticato → naviga a LoginScreen.
+//   3. Utente autenticato con livello salvato → naviga direttamente a
+//      LessonScreen, saltando StartScreen.
+//   4. Utente autenticato senza livello → naviga a StartScreen.
+//
+// Visualizza:
+//   - Gradient background + video in loop (FullScreenVideo)
+//   - Logo animato con fade-in e scale (AnimationController)
+//   - Testo typewriter animato (bidirezionale, loop infinito)
+//   - Cursore lampeggiante sincronizzato con _particleController
+//   - Pulsante CTA principale con gradiente brand cyan→purple
+//   - Icona "Cambia profilo" in alto a destra (solo se autenticato)
+//
+// Classe esportata: SplashScreen
+// =============================================================================
 
-class Splashscreen extends StatefulWidget {
-  const Splashscreen({super.key});
+import 'package:flutter/material.dart';
+import '../widgets/full_screen_video.dart';
+import '../utils/user_preferences.dart';
+import '../utils/app_enums.dart';
+import '../config/app_config.dart';
+
+/// Schermata di avvio con animazione logo, typewriter e CTA.
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<Splashscreen> createState() => _SplashscreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
   double sizeHeight(double percentage) =>
       MediaQuery.of(context).size.height * percentage;
 
@@ -28,11 +55,18 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
   String _displayedText = "";
   final String _fullText = "Ti AIutiamo a superare i tuoi limiti";
 
+  /// Profilo salvato — null = primo avvio
+  SchoolLevel? _savedLevel;
+  bool _isAuthenticated = false;
+
+  /// true mentre leggiamo le preferenze all'avvio (evita flash di UI)
+  bool _isCheckingProfile = true;
+
   @override
   void initState() {
     super.initState();
+    _loadSavedProfile();
 
-    // Animazione logo: fade-in + scale
     _logoController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -52,48 +86,35 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
       ),
     );
 
-    // Animazione particelle luminose
     _particleController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
     )..repeat();
 
-    // Animazione typewriter per il testo (con loop e reverse)
     _typewriterController = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: _fullText.length * 50),
     );
 
     _typewriterController.addListener(() {
-      final progress = _typewriterController.value;
-      final charCount = (_fullText.length * progress).floor();
-      setState(() {
-        _displayedText = _fullText.substring(0, charCount);
-      });
+      final charCount =
+          (_fullText.length * _typewriterController.value).floor();
+      setState(() => _displayedText = _fullText.substring(0, charCount));
     });
 
     _typewriterController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        // Quando l'animazione completa, aspetta un po' e poi torna indietro
         Future.delayed(const Duration(milliseconds: 1000), () {
-          if (mounted) {
-            _typewriterController.reverse();
-          }
+          if (mounted) _typewriterController.reverse();
         });
       } else if (status == AnimationStatus.dismissed) {
-        // Quando torna all'inizio, aspetta un po' e riparte
         Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            _typewriterController.forward();
-          }
+          if (mounted) _typewriterController.forward();
         });
       }
     });
 
-    // Avvia le animazioni in sequenza
-    _logoController.forward().then((_) {
-      _typewriterController.forward();
-    });
+    _logoController.forward().then((_) => _typewriterController.forward());
   }
 
   @override
@@ -104,12 +125,59 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
     super.dispose();
   }
 
+  Future<void> _loadSavedProfile() async {
+    final level = await UserPreferences.getSavedSchoolLevel();
+    final loggedIn = await UserPreferences.isLoggedIn();
+    final guest = await UserPreferences.isGuest();
+    if (mounted) {
+      setState(() {
+        _savedLevel = level;
+        _isAuthenticated = loggedIn || guest;
+        _isCheckingProfile = false;
+      });
+    }
+  }
+
+  /// Naviga in base allo stato. Se [AppConfig.enableLogin] è false,
+  /// va direttamente a StartScreen bypassando il login.
+  Future<void> _onStartPressed() async {
+    if (_isCheckingProfile) return;
+
+    if (!AppConfig.enableLogin) {
+      Navigator.pushNamed(context, '/start');
+      return;
+    }
+
+    if (!_isAuthenticated) {
+      Navigator.pushNamed(context, '/login');
+    } else if (_savedLevel != null) {
+      Navigator.pushNamed(
+        context,
+        '/lesson',
+        arguments: {'schoolLevel': _savedLevel!.routeArgument},
+      );
+    } else {
+      Navigator.pushNamed(context, '/start');
+    }
+  }
+
+  Future<void> _resetProfile() async {
+    await UserPreferences.clearLoginState();
+    if (mounted) {
+      setState(() {
+        _savedLevel = null;
+        _isAuthenticated = false;
+      });
+      Navigator.pushNamed(context, '/login');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // 1️⃣ BACKGROUND VIDEO
+          // Background gradient
           Container(
             height: double.infinity,
             width: double.infinity,
@@ -131,7 +199,7 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
             child: FullScreenVideo(),
           ),
 
-          // 2️⃣ LOGO CON ANIMAZIONE FADE-IN + SCALE
+          // Logo + typewriter
           Align(
             alignment: Alignment.center,
             child: Column(
@@ -151,24 +219,21 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.white.withOpacity(0.3 * _logoFadeAnimation.value),
+                                color: Colors.white.withOpacity(
+                                    0.3 * _logoFadeAnimation.value),
                                 blurRadius: 30,
                                 spreadRadius: 10,
                               ),
                             ],
                           ),
-                          child: Image.asset(
-                            "assets/image/logo.png",
-                            scale: 2.0,
-                          ),
+                          child: Image.asset("assets/image/logo.png",
+                              scale: 2.0),
                         ),
                       ),
                     );
                   },
                 ),
-                const SizedBox(height: 20),
-
-                // 3️⃣ TESTO CON TYPEWRITER EFFECT
+                const SizedBox(height: 24),
                 AnimatedBuilder(
                   animation: _typewriterController,
                   builder: (context, child) {
@@ -190,12 +255,14 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
                             ],
                           ),
                         ),
-                        // Cursore lampeggiante (sempre visibile durante l'animazione)
                         AnimatedBuilder(
                           animation: _particleController,
                           builder: (context, child) {
                             return Opacity(
-                              opacity: (_particleController.value * 2) % 1.0 > 0.5 ? 1.0 : 0.0,
+                              opacity:
+                                  (_particleController.value * 2) % 1.0 > 0.5
+                                      ? 1.0
+                                      : 0.0,
                               child: Container(
                                 width: 2,
                                 height: 24,
@@ -213,15 +280,13 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
             ),
           ),
 
-          // 4️⃣ PULSANTE IN BASSO AL CENTRO
+          // CTA pulsante principale
           Align(
             alignment: Alignment.bottomCenter,
             child: Padding(
               padding: EdgeInsets.only(bottom: sizeHeight(0.08)),
               child: GestureDetector(
-                onTap: () {
-                  Navigator.pushNamed(context, '/start');
-                },
+                onTap: _onStartPressed,
                 child: MouseRegion(
                   onEnter: (_) => setState(() => _isHovering = true),
                   onExit: (_) => setState(() => _isHovering = false),
@@ -232,9 +297,7 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 50,
-                      ),
+                          vertical: 12, horizontal: 50),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [Color(0xFF00B8DB), Color(0xFFAD46FF)],
@@ -278,6 +341,51 @@ class _SplashscreenState extends State<Splashscreen> with TickerProviderStateMix
               ),
             ),
           ),
+
+          // Icona "Cambia profilo" — visibile solo se autenticato
+          if (_isAuthenticated)
+            Positioned(
+              top: 48,
+              right: 16,
+              child: SafeArea(
+                child: Tooltip(
+                  message: 'Cambia profilo',
+                  child: Material(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(24),
+                    child: InkWell(
+                      onTap: _resetProfile,
+                      borderRadius: BorderRadius.circular(24),
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.swap_horiz,
+                                color: Colors.white, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Cambia profilo',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withOpacity(0.4),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

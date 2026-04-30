@@ -73,6 +73,26 @@ enum SchoolLevel {
     }
   }
 
+  /// Descrizione del livello per l'utente nella StartScreen
+  String get levelDescription {
+    switch (this) {
+      case SchoolLevel.media:
+        return 'Pensato per studenti delle scuole medie (11–14 anni). '
+            'Spiegazioni semplici e dirette, esempi concreti della vita quotidiana '
+            'e un linguaggio accessibile per accompagnarti nelle materie del primo ciclo: '
+            'italiano, storia, scienze, matematica e molto altro.';
+      case SchoolLevel.superior:
+        return 'Per gli studenti delle scuole superiori (14–19 anni). '
+            'Approfondimenti più ricchi, connessioni tra le discipline e preparazione '
+            'a verifiche e interrogazioni. Copre licei, istituti tecnici e professionali '
+            'con contenuti adatti al tuo indirizzo di studi.';
+      case SchoolLevel.university:
+        return 'Rivolto agli universitari. Analisi avanzate, fonti accademiche '
+            'e supporto per tesi, esami e ricerca. Il livello di dettaglio è calibrato '
+            'sugli standard dei corsi di laurea triennale e magistrale italiani.';
+    }
+  }
+
   /// Costruisce un SchoolLevel dalla stringa di rotta (case-insensitive).
   /// Ritorna [SchoolLevel.media] come fallback sicuro.
   static SchoolLevel fromRouteArgument(String value) {

@@ -188,7 +188,8 @@ class _TypingDotsWidgetState extends State<TypingDotsWidget>
                 child: Container(
                   width: 6,
                   height: 6,
-                  decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+                  decoration:
+                      BoxDecoration(color: widget.color, shape: BoxShape.circle),
                 ),
               ),
             );

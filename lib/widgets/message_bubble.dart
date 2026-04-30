@@ -15,9 +15,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import '../models/chat_message.dart';
 
-import '../utils/ChatMessage.dart';
-
+/// Bolla di messaggio singolo nella chat con Hooty.
 class Messagebubble extends StatelessWidget {
   final ChatMessage message;
   const Messagebubble({super.key, required this.message});

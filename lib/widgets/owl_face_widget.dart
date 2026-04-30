@@ -49,9 +49,9 @@ class OwlFaceWidget extends StatelessWidget {
           Container(
             width: headSize,
             height: headSize,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               image: DecorationImage(
-                image: AssetImage( 'assets/image/gufo.png'),
+                image: AssetImage('assets/image/gufo.png'),
                 fit: BoxFit.cover,
               ),
             ),

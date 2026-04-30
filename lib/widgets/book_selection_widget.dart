@@ -165,9 +165,15 @@ class BookSelectionWidget extends StatelessWidget {
                           child: SizedBox(
                             width: 100,
                             height: 100,
-                            child: Image.asset(label.toLowerCase()=='medie' ? "assets/icons/icona_medie.png" : label.toLowerCase()=='superiori' ? "assets/icons/icona_superiori.png" : "assets/icons/icona_university.png",
-                                scale: 8,
-                                color: Colors.white.withOpacity(0.8)),
+                            child: Image.asset(
+                              label.toLowerCase() == 'medie'
+                                  ? 'assets/icons/icona_medie.png'
+                                  : label.toLowerCase() == 'superiori'
+                                      ? 'assets/icons/icona_superiori.png'
+                                      : 'assets/icons/icona_university.png',
+                              scale: 8,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
                           ),
                         ),
 
@@ -210,7 +216,8 @@ class BookSelectionWidget extends StatelessWidget {
                     curve: Curves.easeInOut,
                     builder: (context, animValue, child) {
                       return Transform.translate(
-                        offset: Offset(0, math.sin(animValue * math.pi * 4) * 5),
+                        offset:
+                            Offset(0, math.sin(animValue * math.pi * 4) * 5),
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
@@ -245,6 +252,10 @@ class BookSelectionWidget extends StatelessWidget {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// _BookTexturePainter — Texture grafica del libro
+// ---------------------------------------------------------------------------
 
 /// Custom painter per la texture del libro
 class _BookTexturePainter extends CustomPainter {

@@ -15,7 +15,15 @@
       "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\InfiniteBookSpiral.dart\")",
       "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\BookVortexBackground.dart\")",
       "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\SpiralBookPainter.dart\")",
-      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\SpiralPainter.dart\")"
+      "Bash(del \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\widget\\\\SpiralPainter.dart\")",
+      "Bash(Remove-Item -Recurse -Force \"lib\\\\Screens\")",
+      "Bash(Remove-Item -Recurse -Force \"lib\\\\widget\")",
+      "Bash(Remove-Item -Force \"lib\\\\utils\\\\ChatMessage.dart\")",
+      "Bash(Remove-Item -Force \"lib\\\\utils\\\\StickyNote.dart\")",
+      "Bash(Remove-Item -Force \"lib\\\\utils\\\\app_config.dart\")",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\screens\" -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })",
+      "PowerShell(New-Item -ItemType Directory -Path \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\screens\" -Force)",
+      "PowerShell(cd \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\"; flutter analyze --no-pub 2>&1 | Tee-Object -FilePath \"$env:TEMP\\\\analyze_out.txt\" | Select-Object -Last 5)"
     ]
   }
 }

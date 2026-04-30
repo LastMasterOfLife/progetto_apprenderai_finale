@@ -3,29 +3,33 @@
 // =============================================================================
 //
 // Mostra la risposta di Hooty come testo pulito sulla pagina sinistra del
-// libro. Supporta tre modalità di visualizzazione tramite pannello laterale:
-//   - notes: testo formattato (default)
-//   - plainText: testo grezzo senza alcuna formattazione
-//   - custom: container vuoto personalizzabile
+// libro. Supporta due modalità di visualizzazione tramite pannello laterale:
+//   - plainText: testo formattato (default)
+//   - custom: mappa concettuale generata via n8n + QuickChart (SVG)
 //
 // Il contenuto supporta la rotazione 3D (mirror quando la pagina è
 // girata oltre 90°).
+//
+// Nota: usa sempre colori "carta vintage" per il background — NON usa il
+// tema app (light/dark) per mantenere la metafora fisica del libro.
+//
+// Le chiamate HTTP sono delegate ad [ApiService] — questo widget non usa
+// il package http direttamente.
 //
 // Usato in: BookStackWidget
 // =============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dart:math' as math;
-import '../utils/constants.dart';
+import '../services/api_service.dart';
 
 /// Modalità di visualizzazione della pagina sinistra
 enum ContentViewMode {
   /// Testo formattato con titoli e paragrafi (default)
   plainText,
-  /// Pagina vuota con container personalizzabile
+
+  /// Mappa concettuale SVG (generata da n8n + QuickChart)
   custom,
 }
 
@@ -64,10 +68,10 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   late AnimationController _dotsController;
   late Animation<double> _pulseAnimation;
 
-  /// Modalità corrente della pagina (default: notes = testo formattato)
+  /// Modalità corrente della pagina (default: plainText)
   ContentViewMode _viewMode = ContentViewMode.plainText;
 
-  /// Stringa DOT ricevuta dall'API generate-map
+  /// Stringa DOT ricevuta dall'API generate-map (via ApiService)
   String _mapDotString = '';
 
   /// Stringa SVG generata da QuickChart a partire dal DOT
@@ -82,6 +86,9 @@ class _ContentPageLayerState extends State<ContentPageLayer>
   /// Tiene traccia dell'ultimo topic per cui è stata richiesta la mappa
   /// (evita chiamate duplicate)
   String _lastMapTopic = '';
+
+  /// Service layer per le chiamate HTTP (mappa concettuale)
+  final _api = const ApiService();
 
   @override
   void initState() {
@@ -254,7 +261,8 @@ class _ContentPageLayerState extends State<ContentPageLayer>
             icon: Icons.text_snippet_outlined,
             tooltip: 'Testo semplice',
             isActive: _viewMode == ContentViewMode.plainText,
-            onTap: () => setState(() => _viewMode = ContentViewMode.plainText),
+            onTap: () =>
+                setState(() => _viewMode = ContentViewMode.plainText),
           ),
           const SizedBox(height: 12),
           // Icona 2: Mappa concettuale — alterna tra testo e mappa
@@ -299,7 +307,8 @@ class _ContentPageLayerState extends State<ContentPageLayer>
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
               border: isActive
-                  ? Border.all(color: widget.levelColor.withOpacity(0.4), width: 1)
+                  ? Border.all(
+                      color: widget.levelColor.withOpacity(0.4), width: 1)
                   : null,
             ),
             child: Icon(
@@ -325,11 +334,11 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     }
   }
 
-  // =====================================================================
-  // API: generazione mappa concettuale
-  // =====================================================================
+  // ==========================================================================
+  // API: generazione mappa concettuale (via ApiService)
+  // ==========================================================================
 
-  /// Flusso completo: genera DOT → converte in SVG → mostra.
+  /// Flusso completo via ApiService: genera DOT → converte in SVG → mostra.
   /// Viene invocata automaticamente quando si attiva la vista mappa
   /// e il topic è cambiato rispetto all'ultima richiesta.
   Future<void> _fetchMap() async {
@@ -347,152 +356,26 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     });
 
     try {
-      // === STEP 1: Genera la stringa DOT tramite webhook n8n ===
-      debugPrint('=== Map API Call (Step 1: DOT) === Topic: $topic');
-
-      final dotResponse = await http
-          .post(
-            Uri.parse(ApiConstants.generateMapEndpoint),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode({"topic": topic, "depth": 3}),
-          )
-          .timeout(
-            ApiConstants.mapRequestTimeout,
-            onTimeout: () => throw Exception(
-              'Timeout: il server impiega troppo a rispondere. Riprova tra qualche secondo.',
-            ),
-          );
-
-      debugPrint('DOT Response status: ${dotResponse.statusCode}');
-
-      if (dotResponse.statusCode != 200) {
-        setState(() {
-          _mapError =
-              'Errore generazione mappa (HTTP ${dotResponse.statusCode}).\n'
-              'Risposta: ${dotResponse.body.substring(0, dotResponse.body.length.clamp(0, 200))}';
-        });
-        return;
-      }
-
-      // --- Estrai la stringa DOT dalla risposta ---
-      // n8n può rispondere con JSON (es. {"dot":"...", "output":"..."})
-      // oppure con il testo DOT direttamente. Gestiamo entrambi i casi.
-      final dotString = _extractDotFromResponse(dotResponse.body);
-      debugPrint('DOT estratto (${dotString.length} chars): ${dotString.substring(0, dotString.length.clamp(0, 100))}');
-
-      if (dotString.isEmpty) {
-        setState(() => _mapError = 'La risposta del server non contiene una mappa DOT valida.');
-        return;
-      }
-
-      setState(() => _mapDotString = dotString);
-
-      // === STEP 2: Converti DOT in SVG tramite QuickChart ===
-      final svgString = await _fetchSvgFromDot(dotString);
-
-      if (svgString != null) {
-        setState(() {
-          _mapSvgString = svgString;
-          _lastMapTopic = topic;
-        });
-      } else {
-        setState(() => _mapError = 'Errore nella conversione DOT → SVG.\nLa mappa DOT è stata ricevuta ma non è stato possibile renderizzarla.');
-      }
-    } on Exception catch (e) {
-      debugPrint('Errore nella chiamata API mappa: $e');
-      setState(() => _mapError = e.toString().replaceFirst('Exception: ', ''));
+      final result = await _api.generateConceptMap(topic);
+      setState(() {
+        _mapDotString = result.dotString;
+        _mapSvgString = result.svgString;
+        _lastMapTopic = topic;
+      });
+    } on ApiException catch (e) {
+      debugPrint('ContentPageLayer._fetchMap ApiException: $e');
+      setState(() => _mapError = e.message);
     } catch (e) {
-      debugPrint('Errore inatteso nella mappa: $e');
+      debugPrint('ContentPageLayer._fetchMap error: $e');
       setState(() => _mapError = 'Errore inatteso: $e');
     } finally {
       setState(() => _isLoadingMap = false);
     }
   }
 
-  /// Estrae la stringa DOT dalla risposta raw del server.
-  ///
-  /// Supporta tre formati:
-  ///   1. Testo DOT diretto (inizia con "digraph" o "graph")
-  ///   2. JSON con campo "dot", "output", "graph", "answer" o "result"
-  ///   3. JSON con campo "data" che contiene a sua volta la stringa DOT
-  String _extractDotFromResponse(String responseBody) {
-    final trimmed = responseBody.trim();
-
-    // Formato 1: DOT diretto
-    if (trimmed.startsWith('digraph') || trimmed.startsWith('graph ') ||
-        trimmed.startsWith('strict ')) {
-      return trimmed;
-    }
-
-    // Formato 2: JSON
-    try {
-      final parsed = json.decode(trimmed);
-      if (parsed is Map) {
-        // Campi comuni usati da n8n
-        for (final key in ['dot', 'output', 'graph', 'answer', 'result', 'data']) {
-          final value = parsed[key];
-          if (value is String && value.trim().isNotEmpty) {
-            final inner = value.trim();
-            // Potrebbe essere DOT diretto o JSON annidato
-            if (inner.startsWith('digraph') || inner.startsWith('graph ') ||
-                inner.startsWith('strict ')) {
-              return inner;
-            }
-            // Tenta parsing JSON annidato
-            try {
-              final nested = json.decode(inner);
-              if (nested is Map) {
-                for (final nk in ['dot', 'output', 'graph']) {
-                  if (nested[nk] is String) return (nested[nk] as String).trim();
-                }
-              }
-            } catch (_) {}
-            // Usa il valore così com'è (potrebbe essere DOT senza prefisso)
-            return inner;
-          }
-        }
-        // Se la mappa ha un solo valore stringa, usalo
-        final stringValues = parsed.values.whereType<String>().toList();
-        if (stringValues.length == 1) return stringValues.first.trim();
-      }
-    } catch (_) {
-      // Non è JSON valido — fallback al body grezzo
-    }
-
-    // Fallback: usa il body così com'è
-    return trimmed;
-  }
-
-  /// Converte una stringa DOT in SVG usando QuickChart.io
-  Future<String?> _fetchSvgFromDot(String dotString) async {
-    try {
-      debugPrint('=== QuickChart API Call (Step 2: SVG) ===');
-
-      final response = await http
-          .post(
-            Uri.parse('https://quickchart.io/graphviz'),
-            headers: {'Content-Type': 'application/json'},
-            body: json.encode({'graph': dotString, 'format': 'svg'}),
-          )
-          .timeout(const Duration(seconds: 30));
-
-      debugPrint('SVG Response status: ${response.statusCode}, length: ${response.body.length}');
-
-      if (response.statusCode == 200) {
-        return response.body;
-      } else {
-        debugPrint('QuickChart error: ${response.body.substring(0, response.body.length.clamp(0, 300))}');
-        return null;
-      }
-    } catch (e) {
-      debugPrint('Errore QuickChart: $e');
-      return null;
-    }
-  }
-
-  // =====================================================================
+  // ==========================================================================
   // ANIMAZIONE DI CARICAMENTO
-  // =====================================================================
+  // ==========================================================================
 
   /// Animazione di caricamento — linee placeholder + testo pulsante
   Widget _buildLoadingAnimation() {
@@ -544,9 +427,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: List.generate(8, (i) {
-        // Larghezza variabile per simulare righe di testo
         final widthFraction = 0.5 + rng.nextDouble() * 0.45;
-        // Opacità che pulsa leggermente in modo sfalsato per ogni riga
         final phase = (_dotsController.value + i * 0.12) % 1.0;
         final opacity = 0.08 + 0.08 * math.sin(phase * math.pi);
 
@@ -568,12 +449,11 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     );
   }
 
-
-  // =====================================================================
+  // ==========================================================================
   // CONTENUTO: testo grezzo (plainText)
-  // =====================================================================
+  // ==========================================================================
 
-  /// Vista testo grezzo — risposta di Hooty senza alcuna formattazione
+  /// Vista testo grezzo — risposta di Hooty senza markdown
   Widget _buildPlainTextContent() {
     final plainText = _cleanMarkdown(widget.chapterContent);
 
@@ -593,11 +473,11 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     );
   }
 
-  // =====================================================================
-  // CONTENUTO: container custom
-  // =====================================================================
+  // ==========================================================================
+  // CONTENUTO: container mappa concettuale
+  // ==========================================================================
 
-  /// Container per la mappa concettuale — mostra loading, errore o DOT ricevuto
+  /// Container per la mappa concettuale — mostra loading, errore o SVG
   Widget _buildCustomContainer() {
     return Container(
       width: double.infinity,
@@ -752,7 +632,6 @@ class _ContentPageLayerState extends State<ContentPageLayer>
           ),
         ),
       );
-
     }
 
     // === Fallback: DOT ricevuto ma SVG non ancora generato ===
@@ -778,23 +657,7 @@ class _ContentPageLayerState extends State<ContentPageLayer>
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () {
-                // Riprova solo la conversione SVG
-                setState(() {
-                  _isLoadingMap = true;
-                  _mapError = null;
-                });
-                _fetchSvgFromDot(_mapDotString).then((svg) {
-                  setState(() {
-                    _isLoadingMap = false;
-                    if (svg != null) {
-                      _mapSvgString = svg;
-                    } else {
-                      _mapError = 'Conversione SVG fallita';
-                    }
-                  });
-                });
-              },
+              onTap: _fetchMap,
               borderRadius: BorderRadius.circular(8),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -821,58 +684,9 @@ class _ContentPageLayerState extends State<ContentPageLayer>
     );
   }
 
-  // =====================================================================
-  // PARSING: da markdown a sezioni con titoli e paragrafi
-  // =====================================================================
-
-  List<_TextSection> _parseToSections(String content) {
-    final sections = <_TextSection>[];
-    String currentTitle = '';
-    final currentParagraphs = <String>[];
-
-    final lines = content.split('\n');
-
-    for (final line in lines) {
-      final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
-
-      if (trimmed.startsWith('#')) {
-        // Nuova sezione: salva la precedente
-        if (currentTitle.isNotEmpty || currentParagraphs.isNotEmpty) {
-          sections.add(_TextSection(
-            title: currentTitle,
-            paragraphs: List.from(currentParagraphs),
-          ));
-          currentParagraphs.clear();
-        }
-        currentTitle = trimmed.replaceAll(RegExp(r'^#+\s*'), '').trim();
-      } else {
-        // Riga di testo — rimuovi solo la sintassi markdown
-        final cleaned = _cleanMarkdown(trimmed);
-        if (cleaned.isNotEmpty) {
-          currentParagraphs.add(cleaned);
-        }
-      }
-    }
-
-    // Ultima sezione
-    if (currentTitle.isNotEmpty || currentParagraphs.isNotEmpty) {
-      sections.add(_TextSection(
-        title: currentTitle,
-        paragraphs: List.from(currentParagraphs),
-      ));
-    }
-
-    // Fallback se nessuna sezione trovata
-    if (sections.isEmpty) {
-      sections.add(_TextSection(
-        title: '',
-        paragraphs: [content.substring(0, math.min(500, content.length))],
-      ));
-    }
-
-    return sections;
-  }
+  // ==========================================================================
+  // PARSING: rimozione markdown
+  // ==========================================================================
 
   String _cleanMarkdown(String text) {
     return text
@@ -883,15 +697,4 @@ class _ContentPageLayerState extends State<ContentPageLayer>
         .replaceFirst(RegExp(r'^[-*•]\s*'), '')
         .trim();
   }
-}
-
-// =======================================================================
-// MODELLI DATI
-// =======================================================================
-
-class _TextSection {
-  final String title;
-  final List<String> paragraphs;
-
-  const _TextSection({required this.title, required this.paragraphs});
 }
