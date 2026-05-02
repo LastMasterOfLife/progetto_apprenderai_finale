@@ -21,7 +21,7 @@ abstract final class AppConfig {
   ///     l'app parte sempre come al primo avvio.
   ///   - Il banner arancione "⚙ DEV" appare in alto a sinistra.
   ///   - [debugShowCheckedModeBanner] di MaterialApp è attivo.
-  static const bool isDev = true;
+  static const bool isDev = false;
 
   /// Inverso di [isDev] — comodo per guardie esplicite.
   static const bool isProd = !isDev;

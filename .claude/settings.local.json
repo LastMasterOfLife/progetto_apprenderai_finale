@@ -23,7 +23,8 @@
       "Bash(Remove-Item -Force \"lib\\\\utils\\\\app_config.dart\")",
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\screens\" -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })",
       "PowerShell(New-Item -ItemType Directory -Path \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\\\\lib\\\\screens\" -Force)",
-      "PowerShell(cd \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\"; flutter analyze --no-pub 2>&1 | Tee-Object -FilePath \"$env:TEMP\\\\analyze_out.txt\" | Select-Object -Last 5)"
+      "PowerShell(cd \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\"; flutter analyze --no-pub 2>&1 | Tee-Object -FilePath \"$env:TEMP\\\\analyze_out.txt\" | Select-Object -Last 5)",
+      "Bash(dir \"C:\\\\Users\\\\conra\\\\Desktop\\\\progetto_finale\" /b)"
     ]
   }
 }
