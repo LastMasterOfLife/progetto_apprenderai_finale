@@ -49,3 +49,6 @@ installer_output/
 
 # Build Flutter
 build/
+
+# certificati auto-firmati
+certificates/

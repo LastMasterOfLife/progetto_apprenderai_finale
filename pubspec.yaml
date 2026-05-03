@@ -31,28 +31,22 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flutter_markdown: ^0.7.4+1
   http: ^1.6.0
   flutter_svg: ^2.0.17
   shared_preferences: ^2.3.0
+  media_kit: ^1.1.0
+  media_kit_video: ^1.2.0
+  media_kit_libs_windows_video: ^1.0.0
+  page_flip: ^0.2.5+1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^5.0.0
-  media_kit: ^1.1.0
-  media_kit_video: ^1.2.0
-  media_kit_libs_windows_video: ^1.0.0
-  page_flip: ^0.2.5+1
+  msix: ^3.16.13
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -98,3 +92,79 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# =============================================================================
+# MSIX — Configurazione pacchetto Windows (sideloading / distribuzione diretta)
+# =============================================================================
+#
+# PREREQUISITO: eseguire la build release prima di creare l'MSIX
+#   flutter build windows --release
+#
+# GENERARE L'MSIX:
+#   dart run msix:create
+#
+# OUTPUT:
+#   build\windows\x64\runner\Release\apprenderai.msix
+#
+# INSTALLAZIONE SU PC DESTINATARIO:
+#   1. Abilitare "Sideloading": Impostazioni → Sistema → Per sviluppatori →
+#      "Installa app da qualsiasi origine"
+#   2. Doppio clic sul file .msix → segui il wizard
+#   3. Se certificato non trusted: installare prima il .cer (nella stessa
+#      cartella dell'msix) in "Autorità di certificazione radice attendibili"
+# =============================================================================
+
+msix_config:
+
+  # ── Identità pacchetto ──────────────────────────────────────────────────────
+  # Deve essere unico e in formato DNS inverso. Non modificare dopo la prima
+  # distribuzione (cambierà l'identità del pacchetto installato).
+  identity_name: com.inforelea.apprenderai
+
+  # Nome visualizzato nell'installer, nel menu Start e in Programmi installati
+  display_name: ApprenderAI
+
+  # Publisher visibile all'utente (non deve corrispondere al CN del certificato)
+  publisher_display_name: Andrea Conrado
+
+  # Subject del certificato di firma — deve corrispondere ESATTAMENTE al CN
+  # del certificato .pfx usato per firmare.
+  # Se si usa la firma automatica con certificato self-signed (default msix),
+  # lasciare uguale a publisher_display_name.
+  publisher: CN=Andrea Conrado
+
+  # ── Versione ─────────────────────────────────────────────────────────────────
+  # Formato MSIX: Major.Minor.Build.Revision (4 parti, tutte obbligatorie)
+  msix_version: 1.0.0.0
+
+  # ── Icona e logo ─────────────────────────────────────────────────────────────
+  # Il package msix ridimensiona automaticamente il logo nei formati richiesti
+  # (44x44, 150x150, 310x150, ecc.). Usare un'immagine PNG ad alta risoluzione.
+  logo_path: assets\image\logo.png
+
+  # ── Capabilities (permessi dichiarati nel manifest) ──────────────────────────
+  # internetClient: necessario per le chiamate HTTP al backend Flask e a n8n/QuickChart
+  capabilities: internetClient
+
+  # ── Output ───────────────────────────────────────────────────────────────────
+  output_path: installer_output
+  output_name: ApprenderAI_1.0.0
+
+  # ── Firma certificato ────────────────────────────────────────────────────────
+  # OPZIONE A — Certificato self-signed generato automaticamente dal tool msix
+  # (default quando certificate_path è assente). Richiede che il destinatario
+  # installi il .cer come radice attendibile.
+  #
+  # OPZIONE B — Certificato .pfx esistente (commentare/decommentare):
+  # certificate_path: certificates\apprenderai.pfx
+  # certificate_password: TuaPasswordCertificato
+
+  certificate_path: certificates\apprenderai.pfx
+
+  # Installa automaticamente il certificato self-signed durante il processo
+  # di creazione (richiede PowerShell con privilegi admin sulla macchina di build)
+  install_certificate: false
+
+  # ── Metadati aggiuntivi ──────────────────────────────────────────────────────
+  description: Piattaforma di studio AI-powered per scuole medie, superiori e università
+  languages: it-IT, en-US
