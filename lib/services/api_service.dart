@@ -92,10 +92,10 @@ class ApiService {
   ///
   /// Restituisce la stringa formattata pronta per [BookLayer.chaptersIndex].
   /// Lancia [ApiException] in caso di errore HTTP o di connessione.
-  Future<String> fetchChaptersIndex() async {
+  Future<String> fetchChaptersIndex({required SchoolLevel level}) async {
     try {
       final response = await http.get(
-        Uri.parse(ApiConstants.recuperaIndiceEndpoint),
+        Uri.parse(ApiConstants.recuperaIndiceEndpoint(level)),
       );
 
       if (response.statusCode == 200) {
@@ -133,7 +133,7 @@ class ApiService {
 
     try {
       final response = await http.post(
-        Uri.parse(ApiConstants.ragEndpoint),
+        Uri.parse(ApiConstants.ragEndpoint(level)),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(
           _buildRagBody(query: query, numResults: 30, history: history),
@@ -176,7 +176,7 @@ class ApiService {
 
     try {
       final response = await http.post(
-        Uri.parse(ApiConstants.ragEndpoint),
+        Uri.parse(ApiConstants.ragEndpoint(level)),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(
           _buildRagBody(query: query, numResults: 15, history: history),

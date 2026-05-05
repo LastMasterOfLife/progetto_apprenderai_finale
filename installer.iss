@@ -4,26 +4,21 @@
 ;
 ; COME USARE QUESTO FILE
 ; ──────────────────────
-; 1. Assicurati che in lib/config/app_config.dart sia impostato:
-;       static const bool isDev = false;
+; USA build.ps1 invece di compilare questo file direttamente:
 ;
-; 2. Esegui la build di release Flutter:
-;       flutter build windows --release
+;   .\build.ps1
 ;
-; 3. Verifica che la cartella di output esista:
-;       build\windows\x64\runner\Release\
-;
-; 4. Apri questo file con Inno Setup Compiler (tasto destro → "Compile")
-;    oppure da riga di comando:
-;       iscc installer.iss
-;
-; 5. L'installer verrà generato in:
-;       installer_output\ApprenderAI_Setup_1.0.0.exe
+; build.ps1 si occupa di:
+;   - flutter build windows --release
+;   - generazione MSIX firmato
+;   - compilazione e firma dell'installer .exe
 ;
 ; REQUISITI
 ; ─────────
 ; - Inno Setup 6.x  (https://jrsoftware.org/isinfo.php)
 ; - Flutter release build già completata (step 2)
+; - Certificato installato nel Certificate Store (Cert:\CurrentUser\My)
+; - Variabile d'ambiente MSIX_CERT_PASSWORD_APPRENDERAI impostata
 ; =============================================================================
 
 #define AppName        "ApprenderAI"
@@ -78,6 +73,7 @@ MinVersion=10.0.17763
 
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+
 
 ; =============================================================================
 ; [Languages]

@@ -11,7 +11,6 @@ import 'package:flutter/material.dart';
 // Sostituisce i tre booleani (isSelectedMedia / isSelectedSuperior /
 // isSelectedUniversity) di StartScreen e le stringhe hardcoded sparse
 // nel codebase. Tutte le proprietà derivate (colore, immagine, query API)
-// vivono qui — un solo posto da modificare se cambiano le risorse.
 // ---------------------------------------------------------------------------
 
 enum SchoolLevel {
@@ -61,6 +60,15 @@ enum SchoolLevel {
       case SchoolLevel.media:       return 'LIVELLO=MEDIE';
       case SchoolLevel.superior:    return 'LIVELLO=SUPERIORI';
       case SchoolLevel.university:  return 'LIVELLO=UNIVERSITA';
+    }
+  }
+
+  /// Porta del server Flask corrispondente al livello scolastico.
+  int get port {
+    switch (this) {
+      case SchoolLevel.media:       return 5000;
+      case SchoolLevel.superior:    return 5001;
+      case SchoolLevel.university:  return 5002;
     }
   }
 
@@ -121,7 +129,6 @@ enum BookmarkTab { notes, chat }
 //
 // Centralizza la trasformazione del formato raw `MATERIA|ARGOMENTO|SOTTO`
 // in una stringa gerarchica con marcatori `SUBJECT:`.
-// Prima viveva inline in LessonScreen — ora è riutilizzabile e testabile.
 // ---------------------------------------------------------------------------
 
 String parseChaptersIndex(String rawResponse) {
